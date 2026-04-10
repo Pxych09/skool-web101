@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <title>Skool-Web 101</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/11256/11256752.png" type="image/png">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <div id="loadingOverlay" class="loading-overlay d-none" aria-hidden="true">
+      <div class="text-center text-white">
+        <div class="spinner-border text-light mb-3" style="width:3rem;height:3rem;" role="status"></div>
+        <div class="fw-semibold">Loading, please wait...</div>
+      </div>
+    </div>
+
+    <div id="globalAlertWrap" class="global-alert-wrap"></div>
+
+    <div class="school-bg-shape shape-1"></div>
+    <div class="school-bg-shape shape-2"></div>
+    <div class="school-bg-shape shape-3"></div>
+
+    <div id="main">
+
+      <!-- LOGIN -->
+      <section id="loginSection" class="auth-wrap">
+        <div class="auth-card">
+          <div class="auth-badge">
+              <span>SKOOL WEB 101...</span>
+              <i class="bi bi-pencil-fill"></i>
+          </div>
+
+          <div class="welcome-panel mb-4">
+            <div class="d-flex align-items-center gap-3">
+              <div class="welcome-icon">
+                <i class="bi bi-backpack3-fill"></i>
+              </div>
+              <div>
+                <div class="fw-bold">Welcome back!</div>
+                <small>Sign in with your email to continue.</small>
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label for="loginEmail" class="form-label form-label-school">Email Address</label>
+            <div class="input-icon-wrap">
+              <i class="bi bi-envelope-at-fill"></i>
+              <input type="email" id="loginEmail" class="form-control school-input" placeholder="Enter your email">
+            </div>
+          </div>
+
+          <button class="btn btn-school-primary w-100" id="btnLogin" type="button">
+            <i class="bi bi-box-arrow-in-right me-2"></i>
+            Sign in with Email
+          </button>
+        </div>
+      </section>
+
+      <!-- APP -->
+      <section id="appSection" class="d-none">
+        <nav class="topbar-school mb-4">
+          <div class="topbar-brand">
+            <div class="brand-mark">
+              <i class="bi bi-mortarboard-fill"></i>
+            </div>
+            <div>
+              <div class="fw-bold">SKOOL WEB 101</div>
+              <small id="userInfoText" class="text-muted-school"></small>
+            </div>
+          </div>
+          <button class="btn btn-school-outline btn-sm" id="btnLogout" type="button">
+            <i class="bi bi-box-arrow-right me-1"></i>
+            Logout
+          </button>
+        </nav>
+
+        <!-- DASHBOARD -->
+        <section class="school-panel mb-4">
+          <div class="section-head mb-3">
+            <div>
+              <div class="section-tag">Overview</div>
+              <h3 class="section-title mb-0">Dashboard</h3>
+            </div>
+            <div class="section-icon">
+              <i class="bi bi-bar-chart-line-fill"></i>
+            </div>
+          </div>
+
+          <div class="row g-3" id="dashboardCards">
+            <div class="col-md-4">
+              <div class="stat-card stat-blue">
+                <div class="stat-icon"><i class="bi bi-journal-check"></i></div>
+                <div class="stat-content">
+                  <div class="stat-label">Total Exams Taken</div>
+                  <div class="stat-value" id="dashTotalExams">0</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-md-4">
+              <div class="stat-card stat-yellow">
+                <div class="stat-icon"><i class="bi bi-collection-fill"></i></div>
+                <div class="stat-content">
+                  <div class="stat-label">Subjects Taken</div>
+                  <div class="stat-value" id="dashSubjectsTaken">0</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-md-4">
+              <div class="stat-card stat-green">
+                <div class="stat-icon"><i class="bi bi-person-badge-fill"></i></div>
+                <div class="stat-content">
+                  <div class="stat-label">Role</div>
+                  <div class="stat-value" id="dashRole">-</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row g-4 mt-1">
+            <div class="col-lg-6">
+              <div class="inner-panel h-100">
+                <div class="inner-panel-head">
+                  <h5 class="mb-0">Average Score by Subject</h5>
+                </div>
+                <div id="averagesContainer"></div>
+              </div>
+            </div>
+
+            <div class="col-lg-6">
+              <div class="inner-panel h-100">
+                <div class="inner-panel-head">
+                  <h5 class="mb-0">Recent Results</h5>
+                </div>
+                <div id="recentResultsContainer"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ADMIN PANEL -->
+        <section id="adminSection" class="school-panel mb-4 d-none">
+          <div class="section-head mb-3">
+            <div>
+              <div class="section-tag">Admin Tools</div>
+              <h3 class="section-title mb-0">Generate Exams</h3>
+            </div>
+            <div class="section-icon">
+              <i class="bi bi-pencil-square"></i>
+            </div>
+          </div>
+
+          <div class="stepper-wrap mb-4">
+            <div class="stepper-line"></div>
+            <div class="wizard-indicator">
+              <span class="wizard-dot active" data-step-dot="1">1</span>
+              <span class="wizard-dot" data-step-dot="2">2</span>
+              <span class="wizard-dot" data-step-dot="3">3</span>
+            </div>
+          </div>
+
+          <div class="wizard-step active" data-gen-page="1">
+            <div class="inner-panel">
+              <label for="subjectSelect" class="form-label form-label-school">Select Subject</label>
+              <select id="subjectSelect" class="form-select school-input">
+                <option value="">Select Subject</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="wizard-step" data-gen-page="2">
+            <div class="inner-panel">
+              <label for="itemCount" class="form-label form-label-school">How many items do you want?</label>
+              <input type="number" id="itemCount" class="form-control school-input" min="1" max="100" placeholder="Example: 10">
+              <small class="helper-text">This will create the number of question forms.</small>
+            </div>
+          </div>
+
+          <div class="wizard-step" data-gen-page="3">
+            <div class="inner-panel">
+              <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                <div>
+                  <label class="form-label form-label-school mb-0">Question Entries</label>
+                  <div><small id="selectedSubjectLabel" class="helper-text"></small></div>
+                </div>
+                <button class="btn btn-school-outline btn-sm" type="button" id="btnRebuildQuestions">
+                  <i class="bi bi-arrow-repeat me-1"></i>
+                  Rebuild
+                </button>
+              </div>
+              <div id="questionsContainer"></div>
+            </div>
+          </div>
+
+          <div class="d-flex justify-content-between mt-4 gap-2 flex-wrap">
+            <button class="btn btn-school-outline" type="button" id="btnPrev">Previous</button>
+            <div class="d-flex gap-2 flex-wrap">
+              <button class="btn btn-school-secondary" type="button" id="btnNext">Next</button>
+              <button class="btn btn-school-success d-none" type="button" id="btnSubmitQuestions">Save Questions</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- USER EXAM PANEL -->
+        <section id="userExamSection" class="school-panel">
+          <div class="section-head mb-3">
+            <div>
+              <div class="section-tag">Student Area</div>
+              <h3 class="section-title mb-0">Take Exam</h3>
+            </div>
+            <div class="section-icon">
+              <i class="bi bi-journal-text"></i>
+            </div>
+          </div>
+
+          <div class="inner-panel mb-3">
+            <div class="row g-3 align-items-end">
+              <div class="col-md-6">
+                <label for="examSubjectSelect" class="form-label form-label-school">Select Subject</label>
+                <select id="examSubjectSelect" class="form-select school-input">
+                  <option value="">Select Subject</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label form-label-school">Choose Exam Type</label>
+                <div id="examModeOptions" class="exam-mode-grid">
+                  <div class="empty-mode-note">Select a subject first.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="inner-panel mb-3">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+              <div>
+                <div class="fw-semibold">Selected Setup</div>
+                <small id="selectedExamSetupText" class="helper-text">No setup selected yet.</small>
+              </div>
+              <button class="btn btn-school-primary" type="button" id="btnLoadExam">
+                <i class="bi bi-ui-checks-grid me-1"></i>
+                Load Exam
+              </button>
+            </div>
+          </div>
+        </section>
+      </section>
+    </div>
+
+    <!-- EXAM MODAL -->
+    <div class="modal fade" id="examModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content exam-modal-content">
+          <div class="modal-header exam-modal-header" hidden>
+            <div class="w-100 d-flex justify-content-between align-items-start gap-3 flex-wrap">
+              <div>
+                <div class="mb-1"><small>Answer each question before submitting.</small></div>
+                <div class="d-flex gap-2 flex-wrap align-items-center">
+                  <span id="examModalMeta" class="exam-top-badge"></span>
+                </div>
+              </div>
+
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+          </div>
+
+          <div class="modal-body">
+            <div id="examProgressText" class="exam-progress-text mb-3"></div>
+
+            <div id="examCarousel" class="carousel slide" data-bs-interval="false" data-bs-touch="false">
+              <div class="carousel-inner" id="examCarouselInner"></div>
+            </div>
+          </div>
+
+          <div class="modal-footer exam-modal-footer">
+            <button class="btn btn-school-outline" type="button" id="btnExamPrev">
+              <i class="bi bi-arrow-left me-1"></i>
+              Previous
+            </button>
+
+            <div class="d-flex gap-2 flex-wrap">
+              <button class="btn btn-school-secondary" type="button" id="btnExamNext">
+                Next
+                <i class="bi bi-arrow-right ms-1"></i>
+              </button>
+              <button class="btn btn-school-success d-none" type="button" id="btnSubmitExam">
+                <i class="bi bi-send-check-fill me-1"></i>
+                Submit Exam
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
