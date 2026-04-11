@@ -130,8 +130,7 @@ async function completeLogin(userData) {
   await loadRankings();
   startAutoRefresh();
   await loadAnnouncements();
-
-  showLoginAlert(`Welcome, <a href="#"> ${escapeHtml(displayName)}</a>!`, 'success');
+  showLoginAlert(`Welcome, ${escapeHtml(displayName)}!`, 'success');
 }
 
 async function handleSaveUsername() {
@@ -354,7 +353,7 @@ function renderRankingTable() {
         <thead>
           <tr>
             <th>Rank</th>
-            <th>Email</th>
+            <th>Username</th>
             <th>Avg %</th>
             <th>Attempts</th>
             <th>Last Taken</th>
@@ -412,7 +411,13 @@ function getRankingRowClass(item, myEmail) {
   return classes.join(' ');
 }
 
-function truncateEmail(value, maxLength = 18) {
+// function truncateEmail(value, maxLength = 18) {
+//   const text = String(value || '');
+//   if (text.length <= maxLength) return text;
+//   return `${text.slice(0, maxLength - 3)}...`;
+// }
+
+function truncateLabel(value, maxLength = 18) {
   const text = String(value || '');
   if (text.length <= maxLength) return text;
   return `${text.slice(0, maxLength - 3)}...`;
@@ -503,7 +508,10 @@ function renderRankingChart() {
   const topItems = (state.rankings || []).slice(0, 5);
   if (!topItems.length) return;
 
-  const labels = topItems.map(item => truncateEmail(item.email || '', 18));
+  // const labels = topItems.map(item => truncateEmail(item.email || '', 18));
+  const labels = topItems.map(item =>
+    truncateLabel(item.username || item.email || '', 18)
+  );
   const values = topItems.map(item => Number(item.averagePercentage || 0));
 
   state.rankingChart = new Chart(canvas, {
@@ -1327,23 +1335,49 @@ function showGlobalAlert(message, type = 'info') {
   const wrap = $('globalAlertWrap');
   if (!wrap) return;
 
+  const iconMap = {
+    success: 'bi bi-patch-check-fill',
+    danger: 'bi-x-circle-fill',
+    warning: 'bi-exclamation-triangle-fill',
+    info: 'bi-info-circle-fill'
+  };
+
+  const labelMap = {
+    success: 'Success',
+    danger: 'Error',
+    warning: 'Warning',
+    info: 'Notice'
+  };
+
+  const iconClass = iconMap[type] || iconMap.info;
+  const label = labelMap[type] || labelMap.info;
+
   const item = document.createElement('div');
-  item.className = `alert alert-${type} alert-dismissible fade show`;
-  item.setAttribute('role', 'alert');
+  item.className = `alert alert-${type} alert-modern fade-in`;
 
   item.innerHTML = `
-    <div class="d-flex justify-content-between align-items-start gap-3">
-      <div>${message}</div>
-      <div><button type="button" class="btn-close" aria-label="Close"></button></div>
+    <div class="alert-modern-inner">
+      <div class="alert-modern-icon">
+        <i class="bi ${iconClass}"></i>
+      </div>
+
+      <div class="alert-modern-content">
+        <div class="alert-modern-title">${label}</div>
+        <div class="alert-modern-message">${message}</div>
+      </div>
     </div>
   `;
 
-  const closeBtn = item.querySelector('.btn-close');
-  closeBtn.addEventListener('click', () => {
-    item.remove();
-  });
-
   wrap.appendChild(item);
+
+  // ⏱ Auto remove after 6 seconds
+  setTimeout(() => {
+    item.classList.add('fade-out');
+
+    setTimeout(() => {
+      item.remove();
+    }, 400); // match CSS animation
+  }, 6000);
 }
 
 function clearGlobalAlerts() {
