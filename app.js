@@ -17,7 +17,8 @@ const state = {
   selectedExamMode: null,
   examCarousel: null,
   examModalInstance: null,
-  currentExamIndex: 0
+  currentExamIndex: 0,
+  announcements: []
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -49,6 +50,9 @@ function bindEvents() {
   $('btnSubmitExam').addEventListener('click', handleSubmitExam);
   $('btnExamPrev').addEventListener('click', goPrevExamSlide);
   $('btnExamNext').addEventListener('click', goNextExamSlide);
+
+  $('btnPostAnnouncement').addEventListener('click', handlePostAnnouncement);
+  $('btnRefreshAnnouncements').addEventListener('click', loadAnnouncements);
 
   const examCarouselEl = $('examCarousel');
   if (examCarouselEl) {
@@ -84,8 +88,9 @@ async function handleLogin() {
 
     await loadSubjects();
     await loadDashboard();
+    await loadAnnouncements();
 
-    showLoginAlert(`Welcome, ${state.currentUser.email}`, 'success');
+    showLoginAlert(`Welcome, <a href="#"> ${state.currentUser.email}</a>!`, 'success');
   } catch (error) {
     showLoginAlert(error.message, 'danger');
   } finally {
@@ -106,6 +111,7 @@ function handleLogout() {
   state.currentExamIndex = 0;
   state.examCarousel = null;
   state.examModalInstance = null;
+  state.announcements = [];
 
   $('loginSection').classList.remove('d-none');
   $('appSection').classList.add('d-none');
@@ -121,6 +127,8 @@ function handleLogout() {
   $('examModalMeta').textContent = '';
   $('examProgressText').textContent = '';
   $('btnSubmitExam').classList.add('d-none');
+  $('announcementMessage').value = '';
+  $('announcementList').innerHTML = `<div class="empty-mode-note">No announcements yet.</div>`;
 
   clearGlobalAlerts();
   updateAdminWizard();
@@ -183,7 +191,7 @@ function renderAverages(items) {
   box.innerHTML = items.map(item => `
     <div class="table-card">
       <div class="d-flex justify-content-between">
-        <strong>${item.subject}</strong>
+        <strong>${escapeHtml(item.subject)}</strong>
         <span>${item.averagePercentage}%</span>
       </div>
       <div class="small text-muted-school">
@@ -204,7 +212,7 @@ function renderRecentResults(items) {
   box.innerHTML = items.map(item => `
     <div class="result-row">
       <div>
-        <strong>${item.subject}</strong><br>
+        <strong>${escapeHtml(item.subject)}</strong><br>
         <small class="text-muted-school">${formatDate(item.dateTaken)}</small>
       </div>
       <div class="text-end">
@@ -396,7 +404,7 @@ async function handleStudentSubjectChange(e) {
 
     renderExamModeOptions(data.data.totalQuestions || 0);
   } catch (error) {
-    $('examModeOptions').innerHTML = `<div class="empty-mode-note">${error.message}</div>`;
+    $('examModeOptions').innerHTML = `<div class="empty-mode-note">${escapeHtml(error.message)}</div>`;
   }
 }
 
@@ -436,7 +444,7 @@ function renderExamModeOptions(totalQuestions) {
       data-count="${opt.count}"
       data-mode="${opt.mode}"
     >
-      ${opt.label}
+      ${escapeHtml(opt.label)}
     </button>
   `).join('');
 
@@ -541,26 +549,26 @@ function renderExamModalCarousel(questions, subject, examMode) {
   inner.innerHTML = questions.map((q, index) => `
     <div class="carousel-item ${index === 0 ? 'active' : ''}">
       <div class="exam-slide-card">
-        <div class="exam-question-text">${q.question}</div>
+        <div class="exam-question-text">${escapeHtml(q.question)}</div>
 
         <div class="form-check mb-2">
           <input class="form-check-input" type="radio" name="exam_${q.id}" value="Option A" id="${q.id}_A">
-          <label class="form-check-label" for="${q.id}_A">${q.optionA}</label>
+          <label class="form-check-label" for="${q.id}_A">${escapeHtml(q.optionA)}</label>
         </div>
 
         <div class="form-check mb-2">
           <input class="form-check-input" type="radio" name="exam_${q.id}" value="Option B" id="${q.id}_B">
-          <label class="form-check-label" for="${q.id}_B">${q.optionB}</label>
+          <label class="form-check-label" for="${q.id}_B">${escapeHtml(q.optionB)}</label>
         </div>
 
         <div class="form-check mb-2">
           <input class="form-check-input" type="radio" name="exam_${q.id}" value="Option C" id="${q.id}_C">
-          <label class="form-check-label" for="${q.id}_C">${q.optionC}</label>
+          <label class="form-check-label" for="${q.id}_C">${escapeHtml(q.optionC)}</label>
         </div>
 
         <div class="form-check">
           <input class="form-check-input" type="radio" name="exam_${q.id}" value="Option D" id="${q.id}_D">
-          <label class="form-check-label" for="${q.id}_D">${q.optionD}</label>
+          <label class="form-check-label" for="${q.id}_D">${escapeHtml(q.optionD)}</label>
         </div>
       </div>
     </div>
@@ -671,10 +679,193 @@ async function handleSubmitExam() {
   }
 }
 
+/* =========================
+   ANNOUNCEMENTS
+========================= */
+
+async function loadAnnouncements() {
+  try {
+    const res = await fetch(`${API_URL}?action=getAnnouncements`);
+    const data = await res.json();
+
+    if (!data.success) throw new Error(data.message || 'Failed to load announcements.');
+
+    state.announcements = data.data || [];
+    renderAnnouncements();
+  } catch (error) {
+    $('announcementList').innerHTML = `<div class="empty-mode-note">${escapeHtml(error.message)}</div>`;
+  }
+}
+
+function renderAnnouncements() {
+  const box = $('announcementList');
+  const currentEmail = state.currentUser?.email?.toLowerCase?.() || '';
+
+  if (!state.announcements.length) {
+    box.innerHTML = `<div class="empty-mode-note">No announcements yet.</div>`;
+    return;
+  }
+
+  box.innerHTML = state.announcements.map(item => {
+    const userReaction = item.reactionsByUser?.[currentEmail] || '';
+    const likeActive = userReaction === 'like' ? 'active' : '';
+    const dislikeActive = userReaction === 'dislike' ? 'active' : '';
+
+    return `
+      <div class="announcement-card">
+        <div class="announcement-top">
+          <div class="announcement-avatar">${escapeHtml(item.profileLabel || 'S')}</div>
+          <div class="announcement-meta">
+            <div class="announcement-author-row">
+              <span class="announcement-email">${escapeHtml(item.email || '')}</span>
+            </div>
+            <div class="announcement-submeta">
+              <span>${escapeHtml(item.role || 'User')}</span>
+              <span>•</span>
+              <span title="${escapeHtml(formatDate(item.createdAt))}">${escapeHtml(formatRelativeTime(item.createdAt))}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="announcement-message">${escapeHtml(item.message || '')}</div>
+
+        <div class="announcement-actions">
+          <button
+            class="reaction-btn ${likeActive}"
+            type="button"
+            data-announcement-id="${item.announcementId}"
+            data-reaction="like"
+          >
+            <i class="bi bi-hand-thumbs-up-fill me-1"></i>
+            Like
+            <span class="reaction-count">${item.likes || 0}</span>
+          </button>
+
+          <button
+            class="reaction-btn dislike ${dislikeActive}"
+            type="button"
+            data-announcement-id="${item.announcementId}"
+            data-reaction="dislike"
+          >
+            <i class="bi bi-hand-thumbs-down-fill me-1"></i>
+            Dislike
+            <span class="reaction-count">${item.dislikes || 0}</span>
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  box.querySelectorAll('.reaction-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const announcementId = btn.dataset.announcementId;
+      const reaction = btn.dataset.reaction;
+      await handleReactAnnouncement(announcementId, reaction);
+    });
+  });
+}
+
+async function handlePostAnnouncement() {
+  try {
+    const message = $('announcementMessage').value.trim();
+    if (!message) throw new Error('Please write a message first.');
+
+    setLoading(true);
+
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'postAnnouncement',
+        email: state.currentUser.email,
+        message
+      })
+    });
+
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message || 'Failed to post announcement.');
+
+    $('announcementMessage').value = '';
+
+    if (data.data) {
+      state.announcements.unshift(data.data);
+      renderAnnouncements();
+    } else {
+      await loadAnnouncements();
+    }
+
+    showGlobalAlert('Announcement posted successfully.', 'success');
+  } catch (error) {
+    showGlobalAlert(error.message, 'danger');
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function handleReactAnnouncement(announcementId, reaction) {
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'reactAnnouncement',
+        email: state.currentUser.email,
+        announcementId,
+        reaction
+      })
+    });
+
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message || 'Failed to save reaction.');
+
+    const post = state.announcements.find(item => item.announcementId === announcementId);
+    if (post) {
+      post.likes = data.data.likes || 0;
+      post.dislikes = data.data.dislikes || 0;
+      if (!post.reactionsByUser) post.reactionsByUser = {};
+      post.reactionsByUser[state.currentUser.email.toLowerCase()] = data.data.userReaction || '';
+    }
+
+    renderAnnouncements();
+  } catch (error) {
+    showGlobalAlert(error.message, 'danger');
+  }
+}
+
 function formatDate(value) {
   const date = new Date(value);
   if (isNaN(date.getTime())) return '-';
   return date.toLocaleString();
+}
+
+function formatRelativeTime(value) {
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return '-';
+
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+
+  if (seconds < 10) return 'just now';
+  if (seconds < 60) return `${seconds} seconds ago`;
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days} day${days > 1 ? 's' : ''} ago`;
+
+  return formatDate(value);
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function setLoading(isLoading) {
