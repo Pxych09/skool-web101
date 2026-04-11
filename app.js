@@ -18,7 +18,10 @@ const state = {
   examCarousel: null,
   examModalInstance: null,
   currentExamIndex: 0,
-  announcements: []
+  announcements: [],
+  rankings: [],
+  rankingViewType: 'overall',
+  rankingSubject: '',
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -53,6 +56,12 @@ function bindEvents() {
 
   $('btnPostAnnouncement').addEventListener('click', handlePostAnnouncement);
   $('btnRefreshAnnouncements').addEventListener('click', loadAnnouncements);
+  $('rankingViewType').addEventListener('change', handleRankingViewChange);
+  $('btnLoadRankings').addEventListener('click', loadRankings);
+
+  $('rankingSubjectSelect').addEventListener('change', (e) => {
+    state.rankingSubject = e.target.value;
+  });
 
   const examCarouselEl = $('examCarousel');
   if (examCarouselEl) {
@@ -86,8 +95,12 @@ async function handleLogin() {
       $('adminSection').classList.add('d-none');
     }
 
+    $('rankingSection').classList.remove('d-none');
+
     await loadSubjects();
+    renderRankingSubjects();
     await loadDashboard();
+    await loadRankings();
     await loadAnnouncements();
 
     showLoginAlert(`Welcome, <a href="#"> ${state.currentUser.email}</a>!`, 'success');
@@ -112,6 +125,9 @@ function handleLogout() {
   state.examCarousel = null;
   state.examModalInstance = null;
   state.announcements = [];
+  state.rankings = [];
+  state.rankingViewType = 'overall';
+  state.rankingSubject = '';
 
   $('loginSection').classList.remove('d-none');
   $('appSection').classList.add('d-none');
@@ -129,6 +145,10 @@ function handleLogout() {
   $('btnSubmitExam').classList.add('d-none');
   $('announcementMessage').value = '';
   $('announcementList').innerHTML = `<div class="empty-mode-note">No announcements yet.</div>`;
+  $('rankingViewType').value = 'overall';
+  $('rankingSubjectSelect').innerHTML = `<option value="">Select Subject</option>`;
+  $('rankingSubjectWrap').classList.add('d-none');
+  $('rankingTableContainer').innerHTML = `<div class="empty-mode-note">Load rankings to see student standings.</div>`;
 
   clearGlobalAlerts();
   updateAdminWizard();
@@ -180,6 +200,127 @@ async function loadDashboard() {
   renderRecentResults(dash.recentResults || []);
 }
 
+function renderRankingSubjects() {
+  const select = $('rankingSubjectSelect');
+  if (!select) return;
+
+  select.innerHTML = `<option value="">Select Subject</option>`;
+
+  state.subjects.forEach(item => {
+    const opt = document.createElement('option');
+    opt.value = item.subject;
+    opt.textContent = item.subject;
+    select.appendChild(opt);
+  });
+}
+
+function handleRankingViewChange(e) {
+  state.rankingViewType = e.target.value;
+  const isSubject = state.rankingViewType === 'subject';
+
+  $('rankingSubjectWrap').classList.toggle('d-none', !isSubject);
+
+  if (!isSubject) {
+    state.rankingSubject = '';
+    $('rankingSubjectSelect').value = '';
+  }
+}
+
+async function loadRankings() {
+  try {
+    state.rankingViewType = $('rankingViewType').value;
+    state.rankingSubject = $('rankingSubjectSelect').value;
+
+    if (state.rankingViewType === 'subject' && !state.rankingSubject) {
+      throw new Error('Please select a subject for subject ranking.');
+    }
+
+    setLoading(true);
+
+    const url = `${API_URL}?action=getRankings&viewType=${encodeURIComponent(state.rankingViewType)}&subject=${encodeURIComponent(state.rankingSubject)}`;
+    const res = await fetch(url);
+    const data = await res.json();
+
+    console.log('Ranking API response:', data);
+
+    if (!data.success) throw new Error(data.message || 'Failed to load rankings.');
+
+    if (Array.isArray(data.data)) {
+      state.rankings = data.data;
+    } else {
+      state.rankings = data.data?.items || [];
+    }
+
+    console.log('Resolved rankings:', state.rankings);
+
+    renderRankingTable();
+  } catch (error) {
+    $('rankingTableContainer').innerHTML = `<div class="empty-mode-note">${error.message}</div>`;
+  } finally {
+    setLoading(false);
+  }
+}
+
+function renderRankingTable() {
+  const box = $('rankingTableContainer');
+  const items = state.rankings || [];
+
+  if (!items.length) {
+    const isSubject = state.rankingViewType === 'subject';
+    const message = isSubject
+      ? `No ranking data available yet for subject: ${state.rankingSubject || '(none selected)'}.`
+      : 'No ranking data available yet.';
+
+    box.innerHTML = `<div class="empty-mode-note">${message}</div>`;
+    return;
+  }
+
+  box.innerHTML = `
+    <div class="table-responsive">
+      <table class="table ranking-table align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Email</th>
+            <th>Avg %</th>
+            <th>Attempts</th>
+            <th>Last Taken</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${items.map(item => `
+            <tr>
+              <td>${renderRankBadge(item.rank)}</td>
+              <td class="email-cell">
+                <span class="email-text" title="${escapeHtml(item.email || '')}">
+                  ${escapeHtml(item.email || '')}
+                </span>
+              </td>
+              <td><strong>${item.averagePercentage}%</strong></td>
+              <td>${item.attempts}</td>
+              <td title="${escapeHtml(new Date(item.lastTaken).toLocaleString())}">
+                ${escapeHtml(formatDate(item.lastTaken))}
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderRankBadge(rank) {
+  if (rank === 1) {
+    return `<span class="medal-badge medal-gold" title="1st Place">🥇 1st</span>`;
+  }
+  if (rank === 2) {
+    return `<span class="medal-badge medal-silver" title="2nd Place">🥈 2nd</span>`;
+  }
+  if (rank === 3) {
+    return `<span class="medal-badge medal-bronze" title="3rd Place">🥉 3rd</span>`;
+  }
+  return `<span class="medal-badge medal-default" title="Rank ${rank}">#${rank}</span>`;
+}
 function renderAverages(items) {
   const box = $('averagesContainer');
 
@@ -772,17 +913,10 @@ async function handlePostAnnouncement() {
 
     setLoading(true);
 
-    const res = await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({
-        action: 'postAnnouncement',
-        email: state.currentUser.email,
-        message
-      })
-    });
-
+    const url = `${API_URL}?action=postAnnouncement&email=${encodeURIComponent(state.currentUser.email)}&message=${encodeURIComponent(message)}`;
+    const res = await fetch(url);
     const data = await res.json();
+
     if (!data.success) throw new Error(data.message || 'Failed to post announcement.');
 
     $('announcementMessage').value = '';
@@ -796,7 +930,7 @@ async function handlePostAnnouncement() {
 
     showGlobalAlert('Announcement posted successfully.', 'success');
   } catch (error) {
-    showGlobalAlert(error.message, 'danger');
+    showGlobalAlert(error.message || 'Failed to fetch', 'danger');
   } finally {
     setLoading(false);
   }
@@ -804,18 +938,10 @@ async function handlePostAnnouncement() {
 
 async function handleReactAnnouncement(announcementId, reaction) {
   try {
-    const res = await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({
-        action: 'reactAnnouncement',
-        email: state.currentUser.email,
-        announcementId,
-        reaction
-      })
-    });
-
+    const url = `${API_URL}?action=reactAnnouncement&email=${encodeURIComponent(state.currentUser.email)}&announcementId=${encodeURIComponent(announcementId)}&reaction=${encodeURIComponent(reaction)}`;
+    const res = await fetch(url);
     const data = await res.json();
+
     if (!data.success) throw new Error(data.message || 'Failed to save reaction.');
 
     const post = state.announcements.find(item => item.announcementId === announcementId);
@@ -828,14 +954,19 @@ async function handleReactAnnouncement(announcementId, reaction) {
 
     renderAnnouncements();
   } catch (error) {
-    showGlobalAlert(error.message, 'danger');
+    showGlobalAlert(error.message || 'Failed to fetch', 'danger');
   }
 }
 
 function formatDate(value) {
   const date = new Date(value);
   if (isNaN(date.getTime())) return '-';
-  return date.toLocaleString();
+
+  return date.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
 }
 
 function formatRelativeTime(value) {
