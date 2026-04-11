@@ -25,6 +25,8 @@ const state = {
   rankingChart: null,
   announcementRefreshTimer: null,
   rankingRefreshTimer: null,
+  pendingLoginUser: null,
+  usernameModalInstance: null,
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -61,6 +63,7 @@ function bindEvents() {
   $('btnRefreshAnnouncements').addEventListener('click', loadAnnouncements);
   $('rankingViewType').addEventListener('change', handleRankingViewChange);
   $('btnLoadRankings').addEventListener('click', loadRankings);
+  $('btnSaveUsername').addEventListener('click', handleSaveUsername);
 
   $('rankingSubjectSelect').addEventListener('change', (e) => {
     state.rankingSubject = e.target.value;
@@ -84,32 +87,83 @@ async function handleLogin() {
 
     if (!data.success) throw new Error(data.message || 'Login failed.');
 
-    state.currentUser = data.data;
+    state.pendingLoginUser = data.data;
 
-    $('loginSection').classList.add('d-none');
-    $('appSection').classList.remove('d-none');
-
-    $('userInfoText').textContent = `${state.currentUser.email} | ${state.currentUser.role}`;
-    $('dashRole').textContent = state.currentUser.role;
-
-    if (state.currentUser.role === 'Admin') {
-      $('adminSection').classList.remove('d-none');
-    } else {
-      $('adminSection').classList.add('d-none');
+    if (data.data.needsUsernameSetup) {
+      $('usernameInput').value = '';
+      const modalEl = $('usernameSetupModal');
+      state.usernameModalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+      state.usernameModalInstance.show();
+      return;
     }
 
-    $('rankingSection').classList.remove('d-none');
-
-    await loadSubjects();
-    renderRankingSubjects();
-    await loadDashboard();
-    await loadRankings();
-    startAutoRefresh();
-    await loadAnnouncements();
-
-    showLoginAlert(`Welcome, <a href="#"> ${state.currentUser.email}</a>!`, 'success');
+    await completeLogin(data.data);
   } catch (error) {
     showLoginAlert(error.message, 'danger');
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function completeLogin(userData) {
+  state.currentUser = userData;
+  state.pendingLoginUser = null;
+
+  $('loginSection').classList.add('d-none');
+  $('appSection').classList.remove('d-none');
+
+  const displayName = userData.username || userData.email;
+  $('userInfoText').textContent = `${displayName} | ${state.currentUser.role}`;
+  $('dashRole').textContent = state.currentUser.role;
+
+  if (state.currentUser.role === 'Admin') {
+    $('adminSection').classList.remove('d-none');
+  } else {
+    $('adminSection').classList.add('d-none');
+  }
+
+  $('rankingSection').classList.remove('d-none');
+
+  await loadSubjects();
+  renderRankingSubjects();
+  await loadDashboard();
+  await loadRankings();
+  startAutoRefresh();
+  await loadAnnouncements();
+
+  showLoginAlert(`Welcome, <a href="#"> ${escapeHtml(displayName)}</a>!`, 'success');
+}
+
+async function handleSaveUsername() {
+  try {
+    const username = $('usernameInput').value.trim();
+    if (!username) throw new Error('Please enter a username.');
+
+    if (!state.pendingLoginUser?.email) {
+      throw new Error('No pending user found.');
+    }
+
+    setLoading(true);
+
+    const url = `${API_URL}?action=setUsername&email=${encodeURIComponent(state.pendingLoginUser.email)}&username=${encodeURIComponent(username)}`;
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (!data.success) throw new Error(data.message || 'Failed to save username.');
+
+    const completedUser = {
+      ...state.pendingLoginUser,
+      username: data.data.username,
+      needsUsernameSetup: false
+    };
+
+    if (state.usernameModalInstance) {
+      state.usernameModalInstance.hide();
+    }
+
+    await completeLogin(completedUser);
+  } catch (error) {
+    showGlobalAlert(error.message, 'danger');
   } finally {
     setLoading(false);
   }
@@ -132,6 +186,7 @@ function handleLogout() {
   state.rankings = [];
   state.rankingViewType = 'overall';
   state.rankingSubject = '';
+  
 
   $('loginSection').classList.remove('d-none');
   $('appSection').classList.add('d-none');
@@ -312,8 +367,8 @@ function renderRankingTable() {
               <tr class="${rowClass}">
                 <td data-label="Rank">${renderRankBadge(item.rank)}</td>
                 <td class="email-cell" data-label="Email">
-                  <span class="email-text" title="${escapeHtml(item.email || '')}">
-                    ${escapeHtml(item.email || '')}
+                  <span class="email-text" title="${escapeHtml(item.username || item.email || '')}">
+                    ${escapeHtml(item.username || item.email || '')}
                   </span>
                 </td>
                 <td class="ranking-strong" data-label="Avg %">${item.averagePercentage}%</td>
@@ -411,7 +466,7 @@ function renderYourRankCard() {
       <div class="your-rank-clean-left">
         <div class="your-rank-clean-label">Your Rank</div>
         <div class="your-rank-clean-main">${renderRankBadge(me.rank)}</div>
-        <div class="your-rank-clean-sub">${escapeHtml(me.email || '')}</div>
+        <div class="your-rank-clean-sub">${escapeHtml(me.username || me.email || '')}</div>
       </div>
 
       <div class="your-rank-clean-stats">
@@ -1029,7 +1084,7 @@ function renderAnnouncements() {
           <div class="announcement-avatar">${escapeHtml(item.profileLabel || 'S')}</div>
           <div class="announcement-meta">
             <div class="announcement-author-row">
-              <span class="announcement-email">${escapeHtml(item.email || '')}</span>
+            <span class="announcement-email">${escapeHtml(item.username || item.email || '')}</span>
             </div>
             <div class="announcement-submeta">
               <span>${escapeHtml(item.role || 'User')}</span>
