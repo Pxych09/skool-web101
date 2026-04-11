@@ -122,18 +122,7 @@ body {
   color: #8a6500;
 }
 
-.alert-success > div > div {
-  width: 90%;
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  flex-wrap: wrap;
-  font-size: 0.95rem;
-}
 
-.alert-success > div > div a {
-  text-decoration: none;
-}
 
 .global-alert-wrap {
   position: fixed;
@@ -1435,22 +1424,187 @@ body {
   }
 }
 
+/* ===== Modern stacked alerts ===== */
+
+.global-alert-wrap {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2000;
+  width: min(760px, calc(100% - 24px));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.global-alert-wrap .alert {
+  pointer-events: auto;
+}
+
+.alert-modern {
+  border: 1px solid transparent;
+  border-radius: 18px;
+  padding: 0;
+  margin-bottom: 0;
+  overflow: hidden;
+  box-shadow: 0 14px 30px rgba(56, 87, 153, 0.14);
+  backdrop-filter: blur(10px);
+}
+
+.alert-modern-inner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 14px;
+  padding: 16px 18px;
+}
+
+.alert-modern-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.alert-modern-content {
+  min-width: 0;
+}
+
+.alert-modern-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 4px;
+}
+
+.alert-modern-message {
+  font-size: 0.95rem;
+  line-height: 1.5;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.alert-modern-message a {
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.alert-modern-close {
+  margin: 0;
+  padding: 0.25rem;
+  opacity: 0.55;
+  align-self: start;
+}
+
+.alert-modern-close:hover {
+  opacity: 0.9;
+}
+
+/* Success */
+.alert-modern.alert-success {
+  background: rgba(232, 255, 243, 0.96);
+  border-color: #bdebd2;
+  color: #117a4e;
+}
+
+.alert-modern.alert-success .alert-modern-icon {
+  background: rgba(17, 122, 78, 0.1);
+  color: #117a4e;
+}
+
+/* Danger */
+.alert-modern.alert-danger {
+  background: rgba(255, 240, 244, 0.97);
+  border-color: #f5c5d3;
+  color: #b4234a;
+}
+
+.alert-modern.alert-danger .alert-modern-icon {
+  background: rgba(180, 35, 74, 0.1);
+  color: #b4234a;
+}
+
+/* Warning */
+.alert-modern.alert-warning {
+  background: rgba(255, 248, 225, 0.97);
+  border-color: #f2dea0;
+  color: #8a6500;
+}
+
+.alert-modern.alert-warning .alert-modern-icon {
+  background: rgba(138, 101, 0, 0.1);
+  color: #8a6500;
+}
+
+/* Info */
+.alert-modern.alert-info {
+  background: rgba(237, 243, 255, 0.97);
+  border-color: #cfe0ff;
+  color: #345de6;
+}
+
+.alert-modern.alert-info .alert-modern-icon {
+  background: rgba(52, 93, 230, 0.1);
+  color: #345de6;
+}
+/* ===== Alert Animations ===== */
+
+.fade-in {
+  animation: alertFadeIn 0.35s ease forwards;
+}
+
+.fade-out {
+  animation: alertFadeOut 0.4s ease forwards;
+}
+
+@keyframes alertFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes alertFadeOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.96);
+  }
+}
+
 @media (max-width: 480px) {
+  #loginEmail {
+    font-size: .85rem;
+  }
   .exam-mode-group-grid {
     grid-template-columns: 1fr;
   }
-
   .exam-mode-option {
     min-height: 116px;
-  }
-  #globalAlertWrap > div > div:first-of-type {
-    width: 100%;
-    padding-right: .15rem;
-    font-size: .85rem;
   }
   .exam-modal-footer button {
     font-size: .75rem;
     width: 35vw;
     padding: .65rem .15rem;
   }
+  *.alert-modern-inner {
+    padding: 0;
+  }
+  *.alert-modern-message {
+    font-size: .85rem;
+  }
 }
+
+
