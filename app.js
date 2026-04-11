@@ -754,33 +754,62 @@ function renderExamModeOptions(totalQuestions) {
     return;
   }
 
-  const candidateCounts = [5, 10, 20, 50].filter(n => n <= totalQuestions);
-  if (!candidateCounts.includes(totalQuestions)) {
-    candidateCounts.push(totalQuestions);
+  const practiceOptions = [];
+  const officialOptions = [];
+
+  if (totalQuestions >= 5) {
+    practiceOptions.push(
+      {
+        count: 5,
+        mode: 'ordered',
+        label: '5 items only',
+        isOfficial: false
+      },
+      {
+        count: 5,
+        mode: 'random',
+        label: '5 randoms',
+        isOfficial: false
+      }
+    );
   }
 
-  const uniqueCounts = [...new Set(candidateCounts)].sort((a, b) => a - b);
+  if (totalQuestions >= 50) {
+    officialOptions.push(
+      {
+        count: 50,
+        mode: 'ordered',
+        label: '50 items only',
+        isOfficial: true
+      },
+      {
+        count: 50,
+        mode: 'random',
+        label: '50 randoms',
+        isOfficial: true
+      }
+    );
+  } else if (totalQuestions >= 20) {
+    officialOptions.push(
+      {
+        count: totalQuestions,
+        mode: 'ordered',
+        label: `${totalQuestions} items only`,
+        isOfficial: true
+      },
+      {
+        count: totalQuestions,
+        mode: 'random',
+        label: `${totalQuestions} randoms`,
+        isOfficial: true
+      }
+    );
+  }
 
-  const options = [];
-  uniqueCounts.forEach(count => {
-    options.push({
-      count,
-      mode: 'ordered',
-      label: `${count} items only`,
-      isOfficial: count >= 20
-    });
-    options.push({
-      count,
-      mode: 'random',
-      label: `${count} randoms`,
-      isOfficial: count >= 20
-    });
-  });
-
-  box.innerHTML = options.map((opt, index) => `
+  const renderOptionButton = (opt, isActive = false) => `
     <button
       type="button"
-      class="exam-mode-option ${index === 0 ? 'active' : ''} ${opt.isOfficial ? 'official-mode' : 'practice-mode'}"
+      class="exam-mode-option ${isActive ? 'active' : ''} ${opt.isOfficial ? 'official-mode' : 'practice-mode'}"
       data-count="${opt.count}"
       data-mode="${opt.mode}"
       data-label="${opt.label}"
@@ -791,13 +820,51 @@ function renderExamModeOptions(totalQuestions) {
         ${opt.isOfficial ? 'Official • counted in leaderboard' : 'Practice • not counted in leaderboard'}
       </small>
     </button>
-  `).join('');
+  `;
+
+  let html = '';
+
+  if (practiceOptions.length) {
+    html += `
+      <div class="exam-mode-group">
+        <div class="exam-mode-group-head practice-head">
+          <span class="exam-mode-group-title">Practice</span>
+          <span class="exam-mode-group-note">Quick review only</span>
+        </div>
+        <div class="exam-mode-group-grid">
+          ${practiceOptions.map((opt, index) => renderOptionButton(opt, index === 0)).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  if (officialOptions.length) {
+    html += `
+      <div class="exam-mode-group">
+        <div class="exam-mode-group-head official-head">
+          <span class="exam-mode-group-title">Official</span>
+          <span class="exam-mode-group-note">Affects leaderboard</span>
+        </div>
+        <div class="exam-mode-group-grid">
+          ${officialOptions.map(opt => renderOptionButton(opt, false)).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  box.innerHTML = html;
+
+  const firstOption = practiceOptions[0] || officialOptions[0];
+  if (!firstOption) {
+    box.innerHTML = `<div class="empty-mode-note">No valid exam modes available.</div>`;
+    return;
+  }
 
   state.selectedExamMode = {
-    count: options[0].count,
-    mode: options[0].mode,
-    label: options[0].label,
-    isOfficial: options[0].isOfficial
+    count: firstOption.count,
+    mode: firstOption.mode,
+    label: firstOption.label,
+    isOfficial: firstOption.isOfficial
   };
 
   updateSelectedExamSetupText();
@@ -1267,7 +1334,7 @@ function showGlobalAlert(message, type = 'info') {
   item.innerHTML = `
     <div class="d-flex justify-content-between align-items-start gap-3">
       <div>${message}</div>
-      <button type="button" class="btn-close" aria-label="Close"></button>
+      <div><button type="button" class="btn-close" aria-label="Close"></button></div>
     </div>
   `;
 
