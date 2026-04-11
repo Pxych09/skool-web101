@@ -78,6 +78,50 @@
           </button>
         </nav>
 
+                <!-- ANNOUNCEMENT PANEL -->
+        <section id="announcementSection" class="school-panel mb-4">
+          <div class="section-head mb-3">
+            <div>
+              <div class="section-tag">School Feed</div>
+              <h3 class="section-title mb-0">Announcements</h3>
+            </div>
+            <div class="section-icon">
+              <i class="bi bi-megaphone-fill"></i>
+            </div>
+          </div>
+
+          <div class="inner-panel mb-3">
+            <label for="announcementMessage" class="form-label form-label-school">Post a message to everyone</label>
+            <textarea
+              id="announcementMessage"
+              class="form-control school-input announcement-textarea"
+              rows="4"
+              placeholder="Write your announcement here..."
+            ></textarea>
+
+            <div class="d-flex justify-content-end mt-3">
+              <button class="btn btn-school-primary" type="button" id="btnPostAnnouncement">
+                <i class="bi bi-send-fill me-1"></i>
+                Post Message
+              </button>
+            </div>
+          </div>
+
+          <div class="inner-panel">
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+              <h5 class="mb-0">Recent Posts</h5>
+              <button class="btn btn-school-outline btn-sm" type="button" id="btnRefreshAnnouncements">
+                <i class="bi bi-arrow-clockwise me-1"></i>
+                Refresh
+              </button>
+            </div>
+
+            <div id="announcementList">
+              <div class="empty-mode-note">No announcements yet.</div>
+            </div>
+          </div>
+        </section>
+
         <!-- DASHBOARD -->
         <section class="school-panel mb-4">
           <div class="section-head mb-3">
