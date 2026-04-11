@@ -91,12 +91,11 @@
           </div>
 
           <div class="inner-panel mb-3">
-            <label for="announcementMessage" class="form-label form-label-school">Post a message to everyone</label>
             <textarea
               id="announcementMessage"
               class="form-control school-input announcement-textarea"
               rows="4"
-              placeholder="Write your announcement here..."
+              placeholder="Post a message to everyone. Write your announcement here..."
             ></textarea>
 
             <div class="d-flex justify-content-end mt-3">
@@ -183,6 +182,54 @@
                 </div>
                 <div id="recentResultsContainer"></div>
               </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ADMIN RANKING PANEL -->
+        <section id="rankingSection" class="school-panel mb-4 d-none">
+          <div class="section-head mb-3">
+            <div>
+              <div class="section-tag">Leaderboard</div>
+              <h3 class="section-title mb-0">Student Rankings</h3>
+            </div>
+            <div class="section-icon">
+              <i class="bi bi-trophy-fill"></i>
+            </div>
+          </div>
+
+          <div class="inner-panel mb-3">
+            <div class="row g-3 align-items-end">
+              <div class="col-md-4">
+                <label for="rankingViewType" class="form-label form-label-school">View Type</label>
+                <select id="rankingViewType" class="form-select school-input">
+                  <option value="overall">Overall Ranking</option>
+                  <option value="subject">Per Subject Ranking</option>
+                </select>
+              </div>
+
+              <div class="col-md-4 d-none" id="rankingSubjectWrap">
+                <label for="rankingSubjectSelect" class="form-label form-label-school">Select Subject</label>
+                <select id="rankingSubjectSelect" class="form-select school-input">
+                  <option value="">Select Subject</option>
+                </select>
+              </div>
+
+              <div class="col-md-4">
+                <button class="btn btn-school-primary w-100" type="button" id="btnLoadRankings">
+                  <i class="bi bi-bar-chart-steps me-1"></i>
+                  Load Rankings
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="inner-panel">
+            <div class="inner-panel-head">
+              <h5 class="mb-0">Leaderboard</h5>
+            </div>
+            <div id="rankingTableContainer">
+              <div class="empty-mode-note">Load rankings to see student standings.</div>
             </div>
           </div>
         </section>
