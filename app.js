@@ -22,6 +22,9 @@ const state = {
   rankings: [],
   rankingViewType: 'overall',
   rankingSubject: '',
+  rankingChart: null,
+  announcementRefreshTimer: null,
+  rankingRefreshTimer: null,
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -101,6 +104,7 @@ async function handleLogin() {
     renderRankingSubjects();
     await loadDashboard();
     await loadRankings();
+    startAutoRefresh();
     await loadAnnouncements();
 
     showLoginAlert(`Welcome, <a href="#"> ${state.currentUser.email}</a>!`, 'success');
@@ -149,9 +153,14 @@ function handleLogout() {
   $('rankingSubjectSelect').innerHTML = `<option value="">Select Subject</option>`;
   $('rankingSubjectWrap').classList.add('d-none');
   $('rankingTableContainer').innerHTML = `<div class="empty-mode-note">Load rankings to see student standings.</div>`;
+  $('yourRankCard').classList.add('d-none');
+  $('yourRankCard').innerHTML = '';
+  $('rankingStatusText').textContent = 'Waiting for ranking data...';
 
   clearGlobalAlerts();
   updateAdminWizard();
+  stopAutoRefresh();
+  destroyRankingChart();
 }
 
 async function loadSubjects() {
@@ -226,7 +235,7 @@ function handleRankingViewChange(e) {
   }
 }
 
-async function loadRankings() {
+async function loadRankings(isSilent = false) {
   try {
     state.rankingViewType = $('rankingViewType').value;
     state.rankingSubject = $('rankingSubjectSelect').value;
@@ -235,13 +244,15 @@ async function loadRankings() {
       throw new Error('Please select a subject for subject ranking.');
     }
 
-    setLoading(true);
+    if (!isSilent) {
+      setLoading(true);
+    }
+
+    $('rankingStatusText').textContent = 'Refreshing leaderboard...';
 
     const url = `${API_URL}?action=getRankings&viewType=${encodeURIComponent(state.rankingViewType)}&subject=${encodeURIComponent(state.rankingSubject)}`;
     const res = await fetch(url);
     const data = await res.json();
-
-    console.log('Ranking API response:', data);
 
     if (!data.success) throw new Error(data.message || 'Failed to load rankings.');
 
@@ -251,32 +262,39 @@ async function loadRankings() {
       state.rankings = data.data?.items || [];
     }
 
-    console.log('Resolved rankings:', state.rankings);
-
+    renderYourRankCard();
+    renderRankingChart();
     renderRankingTable();
+
+    const now = new Date();
+    $('rankingStatusText').textContent = `Last updated: ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
   } catch (error) {
     $('rankingTableContainer').innerHTML = `<div class="empty-mode-note">${error.message}</div>`;
+    $('rankingStatusText').textContent = 'Unable to refresh leaderboard.';
   } finally {
-    setLoading(false);
+    if (!isSilent) {
+      setLoading(false);
+    }
   }
 }
 
 function renderRankingTable() {
   const box = $('rankingTableContainer');
   const items = state.rankings || [];
+  const myEmail = String(state.currentUser?.email || '').trim().toLowerCase();
 
   if (!items.length) {
     const isSubject = state.rankingViewType === 'subject';
     const message = isSubject
-      ? `No ranking data available yet for subject: ${state.rankingSubject || '(none selected)'}.`
-      : 'No ranking data available yet.';
+    ? `No official leaderboard data yet for subject: ${state.rankingSubject || '(none selected)'}. Only exams with 20+ items count.`
+    : 'No official leaderboard data yet. Only exams with 20+ items count.';
 
     box.innerHTML = `<div class="empty-mode-note">${message}</div>`;
     return;
   }
 
   box.innerHTML = `
-    <div class="table-responsive">
+    <div class="table-responsive ranking-table-wrap">
       <table class="table ranking-table align-middle mb-0">
         <thead>
           <tr>
@@ -288,21 +306,24 @@ function renderRankingTable() {
           </tr>
         </thead>
         <tbody>
-          ${items.map(item => `
-            <tr>
-              <td>${renderRankBadge(item.rank)}</td>
-              <td class="email-cell">
-                <span class="email-text" title="${escapeHtml(item.email || '')}">
-                  ${escapeHtml(item.email || '')}
-                </span>
-              </td>
-              <td><strong>${item.averagePercentage}%</strong></td>
-              <td>${item.attempts}</td>
-              <td title="${escapeHtml(new Date(item.lastTaken).toLocaleString())}">
-                ${escapeHtml(formatDate(item.lastTaken))}
-              </td>
-            </tr>
-          `).join('')}
+          ${items.map(item => {
+            const rowClass = getRankingRowClass(item, myEmail);
+            return `
+              <tr class="${rowClass}">
+                <td data-label="Rank">${renderRankBadge(item.rank)}</td>
+                <td class="email-cell" data-label="Email">
+                  <span class="email-text" title="${escapeHtml(item.email || '')}">
+                    ${escapeHtml(item.email || '')}
+                  </span>
+                </td>
+                <td class="ranking-strong" data-label="Avg %">${item.averagePercentage}%</td>
+                <td data-label="Attempts">${item.attempts}</td>
+                <td class="last-taken-small" data-label="Last Taken" title="${escapeHtml(new Date(item.lastTaken).toLocaleString())}">
+                  ${escapeHtml(formatDate(item.lastTaken))}
+                </td>
+              </tr>
+            `;
+          }).join('')}
         </tbody>
       </table>
     </div>
@@ -321,6 +342,27 @@ function renderRankBadge(rank) {
   }
   return `<span class="medal-badge medal-default" title="Rank ${rank}">#${rank}</span>`;
 }
+
+function getRankingRowClass(item, myEmail) {
+  const classes = [];
+
+  if (item.rank === 1) classes.push('leader-row', 'leader-gold');
+  if (item.rank === 2) classes.push('leader-row', 'leader-silver');
+  if (item.rank === 3) classes.push('leader-row', 'leader-bronze');
+
+  if (String(item.email || '').trim().toLowerCase() === myEmail) {
+    classes.push('my-rank-row');
+  }
+
+  return classes.join(' ');
+}
+
+function truncateEmail(value, maxLength = 18) {
+  const text = String(value || '');
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 3)}...`;
+}
+
 function renderAverages(items) {
   const box = $('averagesContainer');
 
@@ -340,6 +382,113 @@ function renderAverages(items) {
       </div>
     </div>
   `).join('');
+}
+
+function renderYourRankCard() {
+  const box = $('yourRankCard');
+  if (!box || !state.currentUser) return;
+
+  const myEmail = String(state.currentUser.email || '').trim().toLowerCase();
+  const me = (state.rankings || []).find(item => String(item.email || '').trim().toLowerCase() === myEmail);
+
+  box.classList.remove('d-none');
+
+  if (!me) {
+    box.innerHTML = `
+      <div class="your-rank-clean">
+        <div class="your-rank-clean-left">
+          <div class="your-rank-clean-label">Your Rank</div>
+          <div class="your-rank-clean-main">Not ranked yet</div>
+          <div class="your-rank-clean-sub">Take an official exam with 20+ items to appear on the leaderboard.</div>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  box.innerHTML = `
+    <div class="your-rank-clean">
+      <div class="your-rank-clean-left">
+        <div class="your-rank-clean-label">Your Rank</div>
+        <div class="your-rank-clean-main">${renderRankBadge(me.rank)}</div>
+        <div class="your-rank-clean-sub">${escapeHtml(me.email || '')}</div>
+      </div>
+
+      <div class="your-rank-clean-stats">
+        <div class="your-rank-clean-stat">
+          <span class="your-rank-clean-stat-value">${me.averagePercentage}%</span>
+          <span class="your-rank-clean-stat-label">Average</span>
+        </div>
+        <div class="your-rank-clean-stat">
+          <span class="your-rank-clean-stat-value">${me.attempts}</span>
+          <span class="your-rank-clean-stat-label">Attempts</span>
+        </div>
+        <div class="your-rank-clean-stat">
+          <span class="your-rank-clean-stat-value">${escapeHtml(formatDate(me.lastTaken))}</span>
+          <span class="your-rank-clean-stat-label">Last Taken</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function destroyRankingChart() {
+  if (state.rankingChart) {
+    state.rankingChart.destroy();
+    state.rankingChart = null;
+  }
+}
+
+function renderRankingChart() {
+  const canvas = $('rankingChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  destroyRankingChart();
+
+  const topItems = (state.rankings || []).slice(0, 5);
+  if (!topItems.length) return;
+
+  const labels = topItems.map(item => truncateEmail(item.email || '', 18));
+  const values = topItems.map(item => Number(item.averagePercentage || 0));
+
+  state.rankingChart = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Average %',
+        data: values,
+        borderWidth: 1,
+        borderRadius: 12
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: {
+          display: false
+        },
+        tooltip: {
+          callbacks: {
+            title: function(context) {
+              const index = context[0].dataIndex;
+              return topItems[index].email || '';
+            },
+            label: function(context) {
+              return `Average: ${context.raw}%`;
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          suggestedMax: 100
+        }
+      }
+    }
+  });
 }
 
 function renderRecentResults(items) {
@@ -497,17 +646,10 @@ async function handleSaveQuestions() {
 
     setLoading(true);
 
-    const res = await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({
-        action: 'saveExamQuestions',
-        subject: state.selectedAdminSubject,
-        items
-      })
-    });
-
+    const url = `${API_URL}?action=saveExamQuestions&subject=${encodeURIComponent(state.selectedAdminSubject)}&items=${encodeURIComponent(JSON.stringify(items))}`;
+    const res = await fetch(url);
     const data = await res.json();
+
     if (!data.success) throw new Error(data.message || 'Failed to save questions.');
 
     showAdminAlert(`Saved successfully. IDs: ${data.data.ids.join(', ')}`, 'success');
@@ -518,7 +660,7 @@ async function handleSaveQuestions() {
     state.adminStep = 1;
     updateAdminWizard();
   } catch (error) {
-    showAdminAlert(error.message, 'danger');
+    showAdminAlert(error.message || 'Failed to fetch', 'danger');
   } finally {
     setLoading(false);
   }
@@ -557,7 +699,7 @@ function renderExamModeOptions(totalQuestions) {
     return;
   }
 
-  const candidateCounts = [5, 10, 50].filter(n => n <= totalQuestions);
+  const candidateCounts = [5, 10, 20, 50].filter(n => n <= totalQuestions);
   if (!candidateCounts.includes(totalQuestions)) {
     candidateCounts.push(totalQuestions);
   }
@@ -569,33 +711,41 @@ function renderExamModeOptions(totalQuestions) {
     options.push({
       count,
       mode: 'ordered',
-      label: `${count} items only`
+      label: `${count} items only`,
+      isOfficial: count >= 20
     });
     options.push({
       count,
       mode: 'random',
-      label: `${count} randoms`
+      label: `${count} randoms`,
+      isOfficial: count >= 20
     });
   });
 
   box.innerHTML = options.map((opt, index) => `
     <button
       type="button"
-      class="exam-mode-option ${index === 0 ? 'active' : ''}"
+      class="exam-mode-option ${index === 0 ? 'active' : ''} ${opt.isOfficial ? 'official-mode' : 'practice-mode'}"
       data-count="${opt.count}"
       data-mode="${opt.mode}"
+      data-label="${opt.label}"
+      data-official="${opt.isOfficial ? '1' : '0'}"
     >
-      ${escapeHtml(opt.label)}
+      <span class="exam-mode-title">${escapeHtml(opt.label)}</span>
+      <small class="exam-mode-subtext">
+        ${opt.isOfficial ? 'Official • counted in leaderboard' : 'Practice • not counted in leaderboard'}
+      </small>
     </button>
   `).join('');
 
   state.selectedExamMode = {
     count: options[0].count,
     mode: options[0].mode,
-    label: options[0].label
+    label: options[0].label,
+    isOfficial: options[0].isOfficial
   };
 
-  $('selectedExamSetupText').textContent = `${state.selectedExamSubject} | ${state.selectedExamMode.label} | total available: ${totalQuestions}`;
+  updateSelectedExamSetupText();
 
   box.querySelectorAll('.exam-mode-option').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -605,12 +755,27 @@ function renderExamModeOptions(totalQuestions) {
       state.selectedExamMode = {
         count: Number(btn.dataset.count),
         mode: btn.dataset.mode,
-        label: btn.textContent.trim()
+        label: btn.dataset.label,
+        isOfficial: btn.dataset.official === '1'
       };
 
-      $('selectedExamSetupText').textContent = `${state.selectedExamSubject} | ${state.selectedExamMode.label} | total available: ${totalQuestions}`;
+      updateSelectedExamSetupText();
     });
   });
+}
+
+function updateSelectedExamSetupText() {
+  if (!state.selectedExamSubject || !state.selectedExamMode) {
+    $('selectedExamSetupText').textContent = 'No setup selected yet.';
+    return;
+  }
+
+  const typeLabel = state.selectedExamMode.isOfficial
+    ? 'Official • counted in leaderboard'
+    : 'Practice • not counted in leaderboard';
+
+  $('selectedExamSetupText').textContent =
+    `${state.selectedExamSubject} | ${state.selectedExamMode.label} | ${typeLabel}`;
 }
 
 async function handleLoadExam() {
@@ -789,32 +954,38 @@ async function handleSubmitExam() {
 
     setLoading(true);
 
-    const res = await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({
-        action: 'submitExam',
-        email: state.currentUser.email,
-        subject,
-        answers
-      })
-    });
+    const examMode = state.selectedExamMode?.mode || '';
+    const itemCount = state.selectedExamMode?.count || answers.length;
+    const examLabel = state.selectedExamMode?.label || '';
 
+    const url = `${API_URL}?action=submitExam&email=${encodeURIComponent(state.currentUser.email)}&subject=${encodeURIComponent(subject)}&answers=${encodeURIComponent(JSON.stringify(answers))}&examMode=${encodeURIComponent(examMode)}&itemCount=${encodeURIComponent(itemCount)}&examLabel=${encodeURIComponent(examLabel)}`;
+    const res = await fetch(url);
     const data = await res.json();
+
     if (!data.success) throw new Error(data.message || 'Failed to submit exam.');
+    if (!data.data) throw new Error(data.message || 'No exam result returned from server.');
 
     if (state.examModalInstance) {
       state.examModalInstance.hide();
     }
 
+    const isOfficial = Number(data.data.itemCount || data.data.totalItems || 0) >= 20;
+    const examTypeText = isOfficial
+      ? 'This result was recorded as an official exam and affects the leaderboard.'
+      : 'This result was recorded as practice only and does not affect the official leaderboard.';
+
     showUserExamAlert(
-      `Exam submitted successfully.<br>Score: ${data.data.score}/${data.data.totalItems}<br>Percentage: ${data.data.percentage}%`,
+      `Exam submitted successfully.<br>
+      Score: ${data.data.score}/${data.data.totalItems}<br>
+      Percentage: ${data.data.percentage}%<br>
+      <small>${examTypeText}</small>`,
       'success'
     );
 
     await loadDashboard();
+    await loadRankings(true);
   } catch (error) {
-    showUserExamAlert(error.message, 'danger');
+    showUserExamAlert(error.message || 'Failed to fetch', 'danger');
   } finally {
     setLoading(false);
   }
@@ -967,6 +1138,33 @@ function formatDate(value) {
     month: 'short',
     day: 'numeric'
   });
+}
+function startAutoRefresh() {
+  stopAutoRefresh();
+
+  state.announcementRefreshTimer = setInterval(() => {
+    if (state.currentUser) {
+      loadAnnouncements();
+    }
+  }, 15000);
+
+  state.rankingRefreshTimer = setInterval(() => {
+    if (state.currentUser) {
+      loadRankings(true);
+    }
+  }, 15000);
+}
+
+function stopAutoRefresh() {
+  if (state.announcementRefreshTimer) {
+    clearInterval(state.announcementRefreshTimer);
+    state.announcementRefreshTimer = null;
+  }
+
+  if (state.rankingRefreshTimer) {
+    clearInterval(state.rankingRefreshTimer);
+    state.rankingRefreshTimer = null;
+  }
 }
 
 function formatRelativeTime(value) {
