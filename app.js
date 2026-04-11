@@ -365,7 +365,7 @@ function renderRankingTable() {
             return `
               <tr class="${rowClass}">
                 <td data-label="Rank">${renderRankBadge(item.rank)}</td>
-                <td class="email-cell" data-label="Email">
+                <td class="email-cell" data-label="Username">
                   <span class="email-text" title="${escapeHtml(item.username || item.email || '')}">
                     ${escapeHtml(item.username || item.email || '')}
                   </span>
