@@ -343,11 +343,20 @@ body {
 .form-label-school {
   font-weight: 600;
   color: var(--text);
+  text-align: center !important;
+  width: 100%;
 }
 
 .text-muted-school,
 .helper-text {
   color: var(--muted);
+}
+
+#userExamSection .helper-text {
+  font-size: .80rem;
+  border-bottom: 1px solid grey;
+  margin-bottom: 1.25rem !important;
+  text-align: justify;
 }
 
 /* ========================================
@@ -1270,22 +1279,94 @@ body {
   }
 }
 
+#usernameSetupModal > div {
+  min-height: 50dvh !important; 
+}
+
 /* ===== Practice vs Official ===== */
+
+.exam-mode-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.exam-mode-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.exam-mode-group-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 14px;
+}
+
+.practice-head {
+  background: linear-gradient(135deg, #959aff 0%, #fffdf6 100%);
+  border: 1px solid #dfe8ff;
+}
+
+.official-head {
+  background: linear-gradient(135deg, #ffc795 0%, #fffdf6 100%);
+  border: 1px solid #ffe0a3;
+}
+
+.exam-mode-group-title {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text);
+}
+
+.exam-mode-group-note {
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--muted);
+  text-shadow: .55px .25px .15px #400000;
+}
+
+.exam-mode-group-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
 
 .exam-mode-option {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  gap: 6px;
+  min-height: 136px;
+  padding: 16px 14px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  text-align: center;
+  cursor: pointer;
+  transition: 0.2s ease;
+  box-shadow: 0 6px 16px rgba(56, 87, 153, 0.05);
 }
 
 .exam-mode-title {
+  font-size: 1rem;
   font-weight: 700;
+  line-height: 1.3;
 }
 
 .exam-mode-subtext {
-  font-size: 0.75rem;
-  opacity: 0.85;
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.45;
+  opacity: 0.92;
 }
 
 .exam-mode-option.practice-mode {
@@ -1298,20 +1379,78 @@ body {
   border-color: #ffe0a3;
 }
 
+.exam-mode-option.practice-mode:hover {
+  background: #eef4ff;
+  border-color: #b8ccff;
+}
+
+.exam-mode-option.official-mode:hover {
+  background: linear-gradient(135deg, #fff5d8 0%, #fffaf0 100%);
+  border-color: #ffd27a;
+}
+
 .exam-mode-option.active.practice-mode {
   background: linear-gradient(135deg, var(--primary), #6e8dff);
   color: #fff;
+  border-color: transparent;
+  box-shadow: 0 10px 20px rgba(79, 124, 255, 0.22);
 }
 
 .exam-mode-option.active.official-mode {
   background: linear-gradient(135deg, var(--secondary), #ffd257);
   color: #4b3700;
+  border-color: transparent;
+  box-shadow: 0 10px 20px rgba(255, 183, 3, 0.22);
 }
 
-.username-modal-body {
-  background: white !important; color: #222 !important;
+@media (max-width: 768px) {
+  .exam-mode-group-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .exam-mode-group-head {
+    padding: 10px 12px;
+  }
+
+  .exam-mode-group-title {
+    font-size: 0.96rem;
+  }
+
+  .exam-mode-group-note {
+    font-size: 0.78rem;
+  }
+
+  .exam-mode-option {
+    min-height: 128px;
+    padding: 14px 12px;
+  }
+
+  .exam-mode-title {
+    font-size: 0.95rem;
+  }
+
+  .exam-mode-subtext {
+    font-size: 0.78rem;
+  }
 }
 
-#usernameSetupModal > div {
-  min-height: 50dvh !important; 
+@media (max-width: 480px) {
+  .exam-mode-group-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .exam-mode-option {
+    min-height: 116px;
+  }
+  #globalAlertWrap > div > div:first-of-type {
+    width: 100%;
+    padding-right: .15rem;
+    font-size: .85rem;
+  }
+  .exam-modal-footer button {
+    font-size: .75rem;
+    width: 35vw;
+    padding: .65rem .15rem;
+  }
 }
