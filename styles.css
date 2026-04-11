@@ -1307,3 +1307,7 @@ body {
   background: linear-gradient(135deg, var(--secondary), #ffd257);
   color: #4b3700;
 }
+
+.username-modal-body {
+  background: white !important; color: #222 !important;
+}
