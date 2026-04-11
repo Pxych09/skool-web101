@@ -1311,3 +1311,8 @@ body {
 .username-modal-body {
   background: white !important; color: #222 !important;
 }
+
+#usernameSetupModal > div {
+  border: 1px solid red;
+  min-height: 50dvh !important; 
+}
