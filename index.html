@@ -78,111 +78,132 @@
           </button>
         </nav>
 
-                <!-- ANNOUNCEMENT PANEL -->
-        <section id="announcementSection" class="school-panel mb-4">
+        <!-- LINKS -->
+        <header class="border border-1 border-primary shadow-sm rounded p-3 bg-white mb-3 d-flex flex-wrap gap-2 align-items-center justify-content-start">
+          <a href="#dashboardCards" class="px-2 fw-bold">#Dashboard</a>
+          <a href="#announcementSection" class="px-2 fw-bold">#Announcement</a>
+          <a href="#rankingSection" class="px-2 fw-bold">#Leaderboards</a>
+          <a href="#userExamSection" class="px-2 fw-bold">#Exams</a>
+        </header>
+
+                        <!-- USER EXAM PANEL -->
+        <section id="userExamSection" class="school-panel my-4">
           <div class="section-head mb-3">
             <div>
-              <div class="section-tag">School Feed</div>
-              <h3 class="section-title mb-0">Announcements</h3>
-            </div>
-            <div class="section-icon">
-              <i class="bi bi-megaphone-fill"></i>
+              <div class="section-tag"> <i class="bi bi-book"></i> Student Area</div>
             </div>
           </div>
 
           <div class="inner-panel mb-3">
-            <textarea
-              id="announcementMessage"
-              class="form-control school-input announcement-textarea"
-              rows="4"
-              placeholder="Post a message to everyone. Write your announcement here..."
-            ></textarea>
+            <div class="row g-3 align-items-end">
+              <div class="col-md-6">
+                <label class="form-label form-label-school">Choose Subject</label>
+                <div id="examSubjectPicker" class="subject-picker">
+                  <div class="empty-mode-note">Loading subjects...</div>
+                </div>
 
-            <div class="d-flex justify-content-end mt-3">
-              <button class="btn btn-school-primary" type="button" id="btnPostAnnouncement">
-                <i class="bi bi-send-fill me-1"></i>
-                Post Message
-              </button>
+                <!-- keep hidden select for compatibility -->
+                <select id="examSubjectSelect" class="form-select school-input d-none">
+                  <option value="">Select Subject</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label form-label-school">Choose Exam Type</label>
+                <small class="helper-text d-block mb-2">Practice exams help you review. Official exams affect the leaderboard.</small>
+                <div id="examModeOptions" class="exam-mode-grid">
+                  <div class="empty-mode-note">Select a subject first.</div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div class="inner-panel">
-            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-              <h5 class="mb-0">Recent Posts</h5>
-              <button class="btn btn-school-outline btn-sm" type="button" id="btnRefreshAnnouncements">
-                <i class="bi bi-arrow-clockwise me-1"></i>
-                Refresh
+          <div class="inner-panel mb-3">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+              <div>
+                <div class="fw-semibold">Selected Setup</div>
+                <small id="selectedExamSetupText" class="helper-text">No setup selected yet.</small>
+              </div>
+              <button class="btn btn-school-primary align-self-end" type="button" id="btnLoadExam">
+                <i class="bi bi-ui-checks-grid me-1"></i>
+                Load Exam
               </button>
-            </div>
-
-            <div id="announcementList">
-              <div class="empty-mode-note">No announcements yet.</div>
             </div>
           </div>
         </section>
 
-        <!-- DASHBOARD -->
+                <!-- DASHBOARD -->
         <section class="school-panel mb-4">
           <div class="section-head mb-3">
             <div>
-              <div class="section-tag">Overview</div>
-              <h3 class="section-title mb-0">Dashboard</h3>
-            </div>
-            <div class="section-icon">
-              <i class="bi bi-bar-chart-line-fill"></i>
+              <div class="section-tag"><i class="bi bi-activity"></i> Dashboard</div>
             </div>
           </div>
 
-          <div class="row g-3" id="dashboardCards">
-            <div class="col-md-4">
-              <div class="stat-card stat-blue">
-                <div class="stat-icon"><i class="bi bi-journal-check"></i></div>
-                <div class="stat-content">
-                  <div class="stat-label">Total Exams Taken</div>
-                  <div class="stat-value" id="dashTotalExams">0</div>
-                </div>
+          <div class="row g-3 px-2" id="dashboardCards">
+            <div class="shadow rounded d-flex w-100 overflow-hidden px-0">
+              <div class="d-flex justify-content-center align-items-center py-2 px-3 stat-sun"><i class="bi bi-journal-check"></i></div>
+              <div class="d-flex align-items-center flex-fill border-end">
+                <small class="px-2 fw-bold">Total Exams Taken:</small>
+              </div>
+              <div class="d-flex justify-content-center align-items-center py-2 px-4 bg-white border-start">
+                <span id="dashTotalExams" class="fw-bold">0</span>
               </div>
             </div>
-
-            <div class="col-md-4">
-              <div class="stat-card stat-yellow">
-                <div class="stat-icon"><i class="bi bi-collection-fill"></i></div>
-                <div class="stat-content">
-                  <div class="stat-label">Subjects Taken</div>
-                  <div class="stat-value" id="dashSubjectsTaken">0</div>
-                </div>
+            
+            <div class="shadow rounded d-flex w-100 overflow-hidden px-0">
+              <div class="d-flex justify-content-center align-items-center py-2 px-3 stat-sun">
+                <i class="bi bi-collection"></i>
               </div>
-            </div>
-
-            <div class="col-md-4">
-              <div class="stat-card stat-green">
-                <div class="stat-icon"><i class="bi bi-person-badge-fill"></i></div>
-                <div class="stat-content">
-                  <div class="stat-label">Role</div>
-                  <div class="stat-value" id="dashRole">-</div>
-                </div>
+              <div class="d-flex align-items-center flex-fill border-end">
+                <small class="px-2 fw-bold">Subjects Taken:</small>
+              </div>
+              <div class="d-flex justify-content-center align-items-center py-2 px-4 bg-white border-start">
+                <span id="dashSubjectsTaken" class="fw-bold">0</span>
               </div>
             </div>
           </div>
 
           <div class="row g-4 mt-1">
             <div class="col-lg-6">
-              <div class="inner-panel h-100">
-                <div class="inner-panel-head">
-                  <h5 class="mb-0">Average Score by Subject</h5>
+              <div class="inner-panel h-100 border border-secondary">
+                <button
+                  class="inner-panel-head w-100 d-flex justify-content-between align-items-center bg-transparent border-0 p-0 text-start mb-0"
+                  type="button"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#recentResultsCollapse"
+                  aria-expanded="true"
+                  aria-controls="recentResultsCollapse"
+                >
+                  <h6 class="mb-0">Recent Results</h6>
+                  <i class="bi bi-chevron-down toggle-icon"></i>
+                </button>
+
+                <div class="collapse show" id="recentResultsCollapse">
+                  <div id="recentResultsContainer" class="pt-2"></div>
                 </div>
-                <div id="averagesContainer"></div>
               </div>
             </div>
 
             <div class="col-lg-6">
-              <div class="inner-panel h-100">
-                <div class="inner-panel-head">
-                  <h5 class="mb-0">Recent Results</h5>
+              <div class="inner-panel h-100 border border-info">
+                <button
+                  class="inner-panel-head w-100 d-flex justify-content-between align-items-center bg-transparent border-0 p-0 text-start mb-0"
+                  type="button"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#averagesCollapse"
+                  aria-expanded="true"
+                  aria-controls="averagesCollapse"
+                >
+                  <h6 class="mb-0">Average Score by Subject</h6>
+                  <i class="bi bi-chevron-down toggle-icon"></i>
+                </button>
+
+                <div class="collapse show" id="averagesCollapse">
+                  <div id="averagesContainer" class="pt-2"></div>
                 </div>
-                <div id="recentResultsContainer"></div>
               </div>
             </div>
+
           </div>
         </section>
 
@@ -190,15 +211,13 @@
         <section id="rankingSection" class="school-panel mb-4 d-none">
           <div class="section-head mb-3">
             <div>
-              <div class="section-tag">Official Ranking</div>
-              <h3 class="section-title mb-0">Official Leaderboard</h3>
-              <small class="helper-text">
-                <span class="live-dot"></span>
-                Based on exams with 20+ items only • auto-refresh every 15 seconds
-              </small>
-            </div>
-            <div class="section-icon">
-              <i class="bi bi-trophy-fill"></i>
+              <div class="section-tag"><i class="bi bi-trophy-fill"></i> Official Ranking</div>
+              <div class="px-3 py-2">
+                <small class="helper-text">
+                  <span class="live-dot"></span>
+                  Based on exams with 20+ items only • auto-refresh every 15 seconds
+                </small>
+              </div>
             </div>
           </div>
 
@@ -219,7 +238,7 @@
                 </select>
               </div>
 
-              <div class="col-md-4">
+              <div class="col-md-4" hidden>
                 <button class="btn btn-school-primary w-100" type="button" id="btnLoadRankings">
                   <i class="bi bi-bar-chart-steps me-1"></i>
                   Load Rankings
@@ -232,7 +251,6 @@
 
           <div class="inner-panel mb-3">
             <div class="inner-panel-head d-flex justify-content-between align-items-center flex-wrap gap-2">
-              <h5 class="mb-0">Leaderboard Snapshot</h5>
               <small class="helper-text">Top 5 students by average percentage</small>
             </div>
             <div class="chart-wrap">
@@ -251,15 +269,51 @@
           </div>
         </section>
 
+        <!-- ANNOUNCEMENT PANEL -->
+        <section id="announcementSection" class="school-panel my-4">
+          <div class="section-head mb-3">
+            <div>
+              <div class="section-tag"><i class="bi bi-megaphone-fill"></i> School Feed</div>
+            </div>
+          </div>
+
+          <div class="inner-panel">
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+              <h5 class="mb-0">Recent Posts</h5>
+              <button class="btn btn-school-outline btn-sm" type="button" id="btnRefreshAnnouncements">
+                <i class="bi bi-arrow-clockwise me-1"></i>
+                Refresh
+              </button>
+            </div>
+
+            <div id="announcementList">
+              <div class="empty-mode-note">No announcements yet.</div>
+            </div>
+          </div>
+          <hr>
+          <div class="inner-panel mb-3">
+            <textarea
+              id="announcementMessage"
+              class="form-control school-input announcement-textarea"
+              rows="4"
+              placeholder="Post a message to everyone. Write your announcement here..."
+            ></textarea>
+
+            <div class="d-flex justify-content-end mt-3">
+              <button class="btn btn-school-primary" type="button" id="btnPostAnnouncement">
+                <i class="bi bi-send-fill me-1"></i>
+                Post Message
+              </button>
+            </div>
+          </div>
+        </section>
+
         <!-- ADMIN PANEL -->
+         <hr>
         <section id="adminSection" class="school-panel mb-4 d-none">
           <div class="section-head mb-3">
             <div>
-              <div class="section-tag">Admin Tools</div>
-              <h3 class="section-title mb-0">Generate Exams</h3>
-            </div>
-            <div class="section-icon">
-              <i class="bi bi-pencil-square"></i>
+              <div class="section-tag"><i class="bi bi-person-badge"></i> Admin Tools</div>
             </div>
           </div>
 
@@ -274,7 +328,6 @@
 
           <div class="wizard-step active" data-gen-page="1">
             <div class="inner-panel">
-              <label for="subjectSelect" class="form-label form-label-school">Select Subject</label>
               <select id="subjectSelect" class="form-select school-input">
                 <option value="">Select Subject</option>
               </select>
@@ -310,50 +363,6 @@
             <div class="d-flex gap-2 flex-wrap">
               <button class="btn btn-school-secondary" type="button" id="btnNext">Next</button>
               <button class="btn btn-school-success d-none" type="button" id="btnSubmitQuestions">Save Questions</button>
-            </div>
-          </div>
-        </section>
-
-        <!-- USER EXAM PANEL -->
-        <section id="userExamSection" class="school-panel">
-          <div class="section-head mb-3">
-            <div>
-              <div class="section-tag">Student Area</div>
-              <h3 class="section-title mb-0">Take Exam</h3>
-            </div>
-            <div class="section-icon">
-              <i class="bi bi-journal-text"></i>
-            </div>
-          </div>
-
-          <div class="inner-panel mb-3">
-            <div class="row g-3 align-items-end">
-              <div class="col-md-6">
-                <label for="examSubjectSelect" class="form-label form-label-school">Select Subject</label>
-                <select id="examSubjectSelect" class="form-select school-input">
-                  <option value="">Select Subject</option>
-                </select>
-              </div>
-              <div class="col-md-6">
-                <label class="form-label form-label-school">Choose Exam Type</label>
-                <small class="helper-text d-block mb-2">Practice exams help you review. Official exams affect the leaderboard.</small>
-                <div id="examModeOptions" class="exam-mode-grid">
-                  <div class="empty-mode-note">Select a subject first.</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="inner-panel mb-3">
-            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-              <div>
-                <div class="fw-semibold">Selected Setup</div>
-                <small id="selectedExamSetupText" class="helper-text">No setup selected yet.</small>
-              </div>
-              <button class="btn btn-school-primary" type="button" id="btnLoadExam">
-                <i class="bi bi-ui-checks-grid me-1"></i>
-                Load Exam
-              </button>
             </div>
           </div>
         </section>
