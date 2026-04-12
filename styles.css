@@ -1,445 +1,1939 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-    <title>Skool-Web 101</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-    <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/11256/11256752.png" type="image/png">
-    <link rel="stylesheet" href="./styles.css">
-  </head>
-  <body>
-    <div id="loadingOverlay" class="loading-overlay d-none" aria-hidden="true">
-      <div class="text-center text-white">
-        <div class="spinner-border text-primary mb-3" style="width:3rem;height:3rem;" role="status"></div>
-        <div class="fw-semibold text-primary">Loading, please wait...</div>
-      </div>
-    </div>
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Poppins:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cedarville+Cursive&family=Lobster+Two:ital,wght@0,400;0,700;1,400;1,700&family=Playwrite+IE:wght@100..400&family=Share+Tech&display=swap');
 
-    <div id="globalAlertWrap" class="global-alert-wrap"></div>
+/* ========================================
+   ROOT / RESET
+======================================== */
+:root {
+  --bg-main: #f4f7ff;
+  --bg-soft: #eef4ff;
+  --panel: rgba(255, 255, 255, 0.92);
+  --panel-strong: #ffffff;
+  --border: #dbe6ff;
+  --text: #21304d;
+  --muted: #6f7d98;
+  --primary: #4f7cff;
+  --primary-dark: #345de6;
+  --secondary: #ffb703;
+  --secondary-dark: #e49e00;
+  --success: #22b573;
+  --success-dark: #16955d;
+  --danger: #ef476f;
+  --shadow: 0 14px 35px rgba(56, 87, 153, 0.12);
+  --radius-xl: 28px;
+  --radius-lg: 22px;
+  --radius-md: 16px;
+  --radius-sm: 12px;
+}
 
-    <div class="school-bg-shape shape-1"></div>
-    <div class="school-bg-shape shape-2"></div>
-    <div class="school-bg-shape shape-3"></div>
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
 
-    <div id="main">
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  overflow-x: hidden;
+  min-height: 100vh;
+  font-family: 'Poppins', sans-serif;
+  color: var(--text);
+  background: linear-gradient(180deg, #f5f8ff 0%, #eef4ff 100%);
+}
 
-      <!-- LOGIN -->
-      <section id="loginSection" class="auth-wrap">
-        <div class="auth-card">
-          <div class="auth-badge" hidden>
-              <span>SKOOL WEB 101...</span>
-              <i class="bi bi-pencil-fill"></i>
-          </div>
+body {
+  position: relative;
+}
 
-          <div class="welcome-panel mb-4">
-            <div class="d-flex align-items-center gap-3">
-              <div class="welcome-icon">
-                <i class="bi bi-backpack3-fill"></i>
-              </div>
-              <div>
-                <div class="fw-bold">Welcome to "SKOOL WEB 101"</div>
-                <small>Sign in with your email to continue.</small>
-              </div>
-            </div>
-          </div>
+.share-tech-regular {
+  font-family: 'Share Tech', sans-serif;
+  font-weight: 400;
+  font-style: normal;
+}
 
-          <div class="mb-3">
-            <label for="loginEmail" class="form-label form-label-school d-flex align-self-start px-2">Email Address</label>
-            <div class="input-icon-wrap">
-              <i class="bi bi-envelope-at-fill"></i>
-              <input type="email" id="loginEmail" class="form-control school-input" placeholder="Enter your email...">
-            </div>
-          </div>
+/* ========================================
+   BACKGROUND / LAYOUT
+======================================== */
+.school-bg-shape {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(14px);
+  opacity: 0.5;
+  z-index: 0;
+}
 
-          <button class="btn btn-school-primary w-100" id="btnLogin" type="button">
-            <i class="bi bi-box-arrow-in-right me-2"></i>
-            Sign in with Email
-          </button>
-        </div>
-      </section>
+.shape-1 {
+  width: 280px;
+  height: 280px;
+  background: rgba(79, 124, 255, 0.18);
+  top: -60px;
+  left: -60px;
+}
 
-      <!-- APP -->
-      <section id="appSection" class="d-none">
-        <nav class="topbar-school mb-4">
-          <div class="topbar-brand">
-            <div class="brand-mark">
-              <i class="bi bi-mortarboard-fill"></i>
-            </div>
-            <div>
-              <div class="fw-bold">SKOOL WEB 101</div>
-              <small id="userInfoText" class="text-muted-school"></small>
-            </div>
-          </div>
-          <button class="btn btn-school-outline btn-sm" id="btnLogout" type="button">
-            <i class="bi bi-box-arrow-right me-1"></i>
-            Logout
-          </button>
-        </nav>
+.shape-2 {
+  width: 220px;
+  height: 220px;
+  background: rgba(255, 183, 3, 0.2);
+  top: 120px;
+  right: -60px;
+}
 
-        <!-- LINKS -->
-        <header class="border border-1 border-primary shadow-sm rounded p-3 bg-white mb-3 d-flex flex-wrap gap-2 align-items-center justify-content-start">
-          <a href="#dashboardCards" class="px-2 fw-bold">#Dashboard</a>
-          <a href="#announcementSection" class="px-2 fw-bold">#Announcement</a>
-          <a href="#rankingSection" class="px-2 fw-bold">#Leaderboards</a>
-          <a href="#userExamSection" class="px-2 fw-bold">#Exams</a>
-        </header>
+.shape-3 {
+  width: 300px;
+  height: 300px;
+  background: rgba(34, 181, 115, 0.12);
+  bottom: -80px;
+  left: 12%;
+}
 
-                        <!-- USER EXAM PANEL -->
-        <section id="userExamSection" class="school-panel my-4">
-          <div class="section-head mb-3">
-            <div>
-              <div class="section-tag"> <i class="bi bi-book"></i> Student Area</div>
-            </div>
-          </div>
+#main {
+  position: relative;
+  z-index: 1;
+  width: min(1000px, 100%);
+  margin-inline: auto;
+  padding: 24px 16px 40px;
+}
 
-          <div class="inner-panel mb-3">
-            <div class="row g-3 align-items-end">
-              <div class="col-md-6">
-                <label class="form-label form-label-school">Choose Subject</label>
-                <div id="examSubjectPicker" class="subject-picker">
-                  <div class="empty-mode-note">Loading subjects...</div>
-                </div>
+/* ========================================
+   ALERTS / GLOBAL
+======================================== */
+.alert {
+  border: none;
+  border-radius: 16px;
+  padding: 14px 16px;
+  box-shadow: 0 8px 24px rgba(56, 87, 153, 0.06);
+}
 
-                <!-- keep hidden select for compatibility -->
-                <select id="examSubjectSelect" class="form-select school-input d-none">
-                  <option value="">Select Subject</option>
-                </select>
-              </div>
-              <div class="col-md-6">
-                <label class="form-label form-label-school">Choose Exam Type</label>
-                <small class="helper-text d-block mb-2">Practice exams help you review. Official exams affect the leaderboard.</small>
-                <div id="examModeOptions" class="exam-mode-grid">
-                  <div class="empty-mode-note">Select a subject first.</div>
-                </div>
-              </div>
-            </div>
-          </div>
+.alert-success {
+  background: #e8fff3;
+  color: #117a4e;
+}
 
-          <div class="inner-panel mb-3">
-            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-              <div>
-                <div class="fw-semibold">Selected Setup</div>
-                <small id="selectedExamSetupText" class="helper-text">No setup selected yet.</small>
-              </div>
-              <button class="btn btn-school-primary align-self-end" type="button" id="btnLoadExam">
-                <i class="bi bi-ui-checks-grid me-1"></i>
-                Load Exam
-              </button>
-            </div>
-          </div>
-        </section>
+.alert-danger {
+  background: #fff0f4;
+  color: #b4234a;
+}
 
-                <!-- DASHBOARD -->
-        <section class="school-panel mb-4">
-          <div class="section-head mb-3">
-            <div>
-              <div class="section-tag"><i class="bi bi-activity"></i> Dashboard</div>
-            </div>
-          </div>
+.alert-warning {
+  background: #fff8e1;
+  color: #8a6500;
+}
 
-          <div class="row g-3 px-2" id="dashboardCards">
-            <div class="shadow rounded d-flex w-100 overflow-hidden px-0">
-              <div class="d-flex justify-content-center align-items-center py-2 px-3 stat-sun"><i class="bi bi-journal-check"></i></div>
-              <div class="d-flex align-items-center flex-fill border-end">
-                <small class="px-2 fw-bold">Total Exams Taken:</small>
-              </div>
-              <div class="d-flex justify-content-center align-items-center py-2 px-4 bg-white border-start">
-                <span id="dashTotalExams" class="fw-bold">0</span>
-              </div>
-            </div>
-            
-            <div class="shadow rounded d-flex w-100 overflow-hidden px-0">
-              <div class="d-flex justify-content-center align-items-center py-2 px-3 stat-sun">
-                <i class="bi bi-collection"></i>
-              </div>
-              <div class="d-flex align-items-center flex-fill border-end">
-                <small class="px-2 fw-bold">Subjects Taken:</small>
-              </div>
-              <div class="d-flex justify-content-center align-items-center py-2 px-4 bg-white border-start">
-                <span id="dashSubjectsTaken" class="fw-bold">0</span>
-              </div>
-            </div>
-          </div>
 
-          <div class="row g-4 mt-1">
-            <div class="col-lg-6">
-              <div class="inner-panel h-100 border border-secondary">
-                <button
-                  class="inner-panel-head w-100 d-flex justify-content-between align-items-center bg-transparent border-0 p-0 text-start mb-0"
-                  type="button"
-                  data-bs-toggle="collapse"
-                  data-bs-target="#recentResultsCollapse"
-                  aria-expanded="true"
-                  aria-controls="recentResultsCollapse"
-                >
-                  <h6 class="mb-0">Recent Results</h6>
-                  <i class="bi bi-chevron-down toggle-icon"></i>
-                </button>
 
-                <div class="collapse show" id="recentResultsCollapse">
-                  <div id="recentResultsContainer" class="pt-2"></div>
-                </div>
-              </div>
-            </div>
+.global-alert-wrap {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 99999;
+  width: min(760px, calc(100% - 24px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 
-            <div class="col-lg-6">
-              <div class="inner-panel h-100 border border-info">
-                <button
-                  class="inner-panel-head w-100 d-flex justify-content-between align-items-center bg-transparent border-0 p-0 text-start mb-0"
-                  type="button"
-                  data-bs-toggle="collapse"
-                  data-bs-target="#averagesCollapse"
-                  aria-expanded="true"
-                  aria-controls="averagesCollapse"
-                >
-                  <h6 class="mb-0">Average Score by Subject</h6>
-                  <i class="bi bi-chevron-down toggle-icon"></i>
-                </button>
+.global-alert-wrap .alert {
+  margin-bottom: 0;
+  display: block;
+  border-radius: 16px;
+  padding: 14px 16px;
+  box-shadow: 0 10px 24px rgba(56, 87, 153, 0.12);
+}
 
-                <div class="collapse show" id="averagesCollapse">
-                  <div id="averagesContainer" class="pt-2"></div>
-                </div>
-              </div>
-            </div>
+.global-alert-wrap .btn-close {
+  flex-shrink: 0;
+}
 
-          </div>
-        </section>
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(27, 39, 72, 0.35);
+  backdrop-filter: blur(5px);
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(4px);
+}
 
-        <!-- RANKING PANEL -->
-        <section id="rankingSection" class="school-panel mb-4 d-none">
-          <div class="section-head mb-3">
-            <div>
-              <div class="section-tag"><i class="bi bi-trophy-fill"></i> Official Ranking</div>
-              <div class="px-3 py-2">
-                <small class="helper-text">
-                  <span class="live-dot"></span>
-                  Based on exams with 20+ items only • auto-refresh every 15 seconds
-                </small>
-              </div>
-            </div>
-          </div>
+/* ========================================
+   AUTH
+======================================== */
+.auth-wrap {
+  display: grid;
+  place-items: center;
+}
 
-          <div class="inner-panel mb-3">
-            <div class="row g-3 align-items-end">
-              <div class="col-md-4">
-                <label for="rankingViewType" class="form-label form-label-school">View Type</label>
-                <select id="rankingViewType" class="form-select school-input">
-                  <option value="overall">Overall Ranking</option>
-                  <option value="subject">Per Subject Ranking</option>
-                </select>
-              </div>
+.auth-card {
+  width: min(520px, 100%);
+  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow);
+  padding: 32px;
+  backdrop-filter: blur(10px);
+}
 
-              <div class="col-md-4 d-none" id="rankingSubjectWrap">
-                <label for="rankingSubjectSelect" class="form-label form-label-school">Select Subject</label>
-                <select id="rankingSubjectSelect" class="form-select school-input">
-                  <option value="">Select Subject</option>
-                </select>
-              </div>
+.auth-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #edf3ff;
+  color: var(--primary-dark);
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 18px;
+}
 
-              <div class="col-md-4" hidden>
-                <button class="btn btn-school-primary w-100" type="button" id="btnLoadRankings">
-                  <i class="bi bi-bar-chart-steps me-1"></i>
-                  Load Rankings
-                </button>
-              </div>
-            </div>
-          </div>
+.brand-logo {
+  width: 84px;
+  height: 84px;
+  margin-inline: auto;
+  border-radius: 24px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--primary), #7c9bff);
+  color: white;
+  font-size: 34px;
+  box-shadow: 0 12px 30px rgba(79, 124, 255, 0.25);
+}
 
-          <div id="yourRankCard" class="inner-panel mb-3 d-none"></div>
+.auth-title {
+  font-family: 'Fredoka', sans-serif;
+  font-size: 2rem;
+  color: var(--text);
+  margin-bottom: 6px;
+}
 
-          <div class="inner-panel mb-3">
-            <div class="inner-panel-head d-flex justify-content-between align-items-center flex-wrap gap-2">
-              <small class="helper-text">Top 5 students by average percentage</small>
-            </div>
-            <div class="chart-wrap">
-              <canvas id="rankingChart" height="120"></canvas>
-            </div>
-          </div>
+.auth-subtitle {
+  color: var(--muted);
+  margin-bottom: 0;
+}
 
-          <div class="inner-panel">
-            <div class="inner-panel-head d-flex justify-content-between align-items-center flex-wrap gap-2">
-              <h5 class="mb-0">Leaderboard Table</h5>
-              <small class="helper-text" id="rankingStatusText">Waiting for official leaderboard data...</small>
-            </div>
-            <div id="rankingTableContainer">
-              <div class="empty-mode-note">Load rankings to see student standings.</div>
-            </div>
-          </div>
-        </section>
+.welcome-panel {
+  background: linear-gradient(135deg, #eef4ff 0%, #fdf8e8 100%);
+  border: 1px solid #e1e9ff;
+  border-radius: var(--radius-lg);
+  padding: 16px;
+}
 
-        <!-- ANNOUNCEMENT PANEL -->
-        <section id="announcementSection" class="school-panel my-4">
-          <div class="section-head mb-3">
-            <div>
-              <div class="section-tag"><i class="bi bi-megaphone-fill"></i> School Feed</div>
-            </div>
-          </div>
+.welcome-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  background: white;
+  color: var(--primary);
+  font-size: 22px;
+  box-shadow: 0 6px 18px rgba(79, 124, 255, 0.12);
+}
 
-          <div class="inner-panel">
-            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-              <h5 class="mb-0">Recent Posts</h5>
-              <button class="btn btn-school-outline btn-sm" type="button" id="btnRefreshAnnouncements">
-                <i class="bi bi-arrow-clockwise me-1"></i>
-                Refresh
-              </button>
-            </div>
+/* ========================================
+   SHELL / PANELS
+======================================== */
+.topbar-school {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid white;
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+}
 
-            <div id="announcementList">
-              <div class="empty-mode-note">No announcements yet.</div>
-            </div>
-          </div>
-          <hr>
-          <div class="inner-panel mb-3">
-            <textarea
-              id="announcementMessage"
-              class="form-control school-input announcement-textarea"
-              rows="4"
-              placeholder="Post a message to everyone. Write your announcement here..."
-            ></textarea>
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
 
-            <div class="d-flex justify-content-end mt-3">
-              <button class="btn btn-school-primary" type="button" id="btnPostAnnouncement">
-                <i class="bi bi-send-fill me-1"></i>
-                Post Message
-              </button>
-            </div>
-          </div>
-        </section>
+.brand-mark {
+  width: 52px;
+  height: 52px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--primary), #7a95ff);
+  color: white;
+  font-size: 22px;
+}
 
-        <!-- ADMIN PANEL -->
-         <hr>
-        <section id="adminSection" class="school-panel mb-4 d-none">
-          <div class="section-head mb-3">
-            <div>
-              <div class="section-tag"><i class="bi bi-person-badge"></i> Admin Tools</div>
-            </div>
-          </div>
+.school-panel {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid white;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow);
+  padding: 24px;
+  backdrop-filter: blur(10px);
+}
 
-          <div class="stepper-wrap mb-4">
-            <div class="stepper-line"></div>
-            <div class="wizard-indicator">
-              <span class="wizard-dot active" data-step-dot="1">1</span>
-              <span class="wizard-dot" data-step-dot="2">2</span>
-              <span class="wizard-dot" data-step-dot="3">3</span>
-            </div>
-          </div>
+.inner-panel {
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+}
 
-          <div class="wizard-step active" data-gen-page="1">
-            <div class="inner-panel">
-              <select id="subjectSelect" class="form-select school-input">
-                <option value="">Select Subject</option>
-              </select>
-            </div>
-          </div>
+.inner-panel-head {
+  margin-bottom: 14px;
+}
 
-          <div class="wizard-step" data-gen-page="2">
-            <div class="inner-panel">
-              <label for="itemCount" class="form-label form-label-school">How many items do you want?</label>
-              <input type="number" id="itemCount" class="form-control school-input" min="1" max="100" placeholder="Example: 10">
-              <small class="helper-text">This will create the number of question forms.</small>
-            </div>
-          </div>
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
 
-          <div class="wizard-step" data-gen-page="3">
-            <div class="inner-panel">
-              <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-                <div>
-                  <label class="form-label form-label-school mb-0">Question Entries</label>
-                  <div><small id="selectedSubjectLabel" class="helper-text"></small></div>
-                </div>
-                <button class="btn btn-school-outline btn-sm" type="button" id="btnRebuildQuestions">
-                  <i class="bi bi-arrow-repeat me-1"></i>
-                  Rebuild
-                </button>
-              </div>
-              <div id="questionsContainer"></div>
-            </div>
-          </div>
+.section-tag {
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #edf3ff;
+  color: var(--primary-dark);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
 
-          <div class="d-flex justify-content-between mt-4 gap-2 flex-wrap">
-            <button class="btn btn-school-outline" type="button" id="btnPrev">Previous</button>
-            <div class="d-flex gap-2 flex-wrap">
-              <button class="btn btn-school-secondary" type="button" id="btnNext">Next</button>
-              <button class="btn btn-school-success d-none" type="button" id="btnSubmitQuestions">Save Questions</button>
-            </div>
-          </div>
-        </section>
-      </section>
-    </div>
+.section-title {
+  font-family: 'Fredoka', sans-serif;
+  font-size: 1.6rem;
+  color: var(--text);
+}
 
-    <!-- EXAM MODAL -->
-    <div class="modal fade" id="examModal" tabindex="-1" aria-hidden="true">
-      <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content exam-modal-content">
-          <div class="modal-header exam-modal-header" hidden>
-            <div class="w-100 d-flex justify-content-between align-items-start gap-3 flex-wrap">
-              <div>
-                <div class="mb-1"><small>Answer each question before submitting.</small></div>
-                <div class="d-flex gap-2 flex-wrap align-items-center">
-                  <span id="examModalMeta" class="exam-top-badge"></span>
-                </div>
-              </div>
+.section-icon {
+  width: 54px;
+  height: 54px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #eef4ff 0%, #fff8e6 100%);
+  color: var(--primary-dark);
+  font-size: 22px;
+}
 
-              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-          </div>
+/* ========================================
+   TYPOGRAPHY / HELPERS
+======================================== */
+.form-label-school {
+  font-weight: 600;
+  color: var(--text);
+  text-align: center !important;
+  width: 100%;
+}
 
-          <div class="modal-body">
-            <div id="examProgressText" class="exam-progress-text mb-3"></div>
+.text-muted-school,
+.helper-text {
+  color: var(--muted);
+}
 
-            <div id="examCarousel" class="carousel slide" data-bs-interval="false" data-bs-touch="false">
-              <div class="carousel-inner" id="examCarouselInner"></div>
-            </div>
-          </div>
+#userExamSection .helper-text {
+  font-size: .80rem;
+  border-bottom: 1px solid grey;
+  margin-bottom: 1.25rem !important;
+  text-align: justify;
+}
 
-          <div class="modal-footer exam-modal-footer">
-            <button class="btn btn-school-outline" type="button" id="btnExamPrev">
-              <i class="bi bi-arrow-left me-1"></i>
-              Previous
-            </button>
+/* ========================================
+   INPUTS / BUTTONS
+======================================== */
+.input-icon-wrap {
+  position: relative;
+}
 
-            <div class="d-flex gap-2 flex-wrap">
-              <button class="btn btn-school-secondary" type="button" id="btnExamNext">
-                Next
-                <i class="bi bi-arrow-right ms-1"></i>
-              </button>
-              <button class="btn btn-school-success d-none" type="button" id="btnSubmitExam">
-                <i class="bi bi-send-check-fill me-1"></i>
-                Submit Exam
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+.input-icon-wrap i {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-size: 1rem;
+}
 
-    <div class="modal fade" id="usernameSetupModal" tabindex="-1" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content exam-modal-content">
-          
-          <div class="modal-body username-modal-body">
-            <label for="usernameInput" class="form-label form-label-school">Enter Username:</label>
-            <input
-              type="text"
-              id="usernameInput"
-              class="form-control school-input"
-              maxlength="30"
-              placeholder="Tell us what you want to be called."
-            >
-          </div>
-          <div class="modal-footer">
-            <button class="btn btn-school-primary" type="button" id="btnSaveUsername">
-              Save Username
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+.school-input {
+  min-height: 52px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: #fbfcff;
+  box-shadow: none;
+}
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="./app.js"></script>
-  </body>
-</html>
+.input-icon-wrap .school-input {
+  padding-left: 44px;
+}
+
+.school-input:focus {
+  border-color: #9fb8ff;
+  box-shadow: 0 0 0 0.25rem rgba(79, 124, 255, 0.14);
+}
+
+.btn {
+  border-radius: 14px;
+  font-weight: 600;
+  padding: 12px 18px;
+}
+
+.btn-school-primary {
+  background: linear-gradient(135deg, var(--primary), #6d8cff);
+  color: white;
+  border: none;
+}
+
+.btn-school-primary:hover {
+  background: linear-gradient(135deg, var(--primary-dark), #5877ff);
+  color: white;
+}
+
+.btn-school-secondary {
+  background: linear-gradient(135deg, var(--secondary), #ffc933);
+  color: #4b3700;
+  border: none;
+}
+
+.btn-school-secondary:hover {
+  background: linear-gradient(135deg, var(--secondary-dark), #ffbe1f);
+  color: #4b3700;
+}
+
+.btn-school-success {
+  background: linear-gradient(135deg, var(--success), #34cb87);
+  color: white;
+  border: none;
+}
+
+.btn-school-success:hover {
+  background: linear-gradient(135deg, var(--success-dark), #22b573);
+  color: white;
+}
+
+.btn-school-outline {
+  background: white;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.btn-school-outline:hover {
+  background: #f5f8ff;
+  color: var(--primary-dark);
+  border-color: #b8ccff;
+}
+
+/* ========================================
+   DASHBOARD / STATS
+======================================== */
+.stat-card {
+  min-height: 120px;
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  border: 1px solid transparent;
+  box-shadow: 0 8px 24px rgba(56, 87, 153, 0.08);
+}
+
+.stat-blue {
+  background: linear-gradient(135deg, #eaf1ff 0%, #f4f8ff 100%);
+  border-color: #d7e4ff;
+}
+
+.stat-yellow {
+  background: linear-gradient(135deg, #fff5d8 0%, #fffaf0 100%);
+  border-color: #ffe7a3;
+}
+
+.stat-sun {
+  background: linear-gradient(135deg, #fffcd8 0%, #ffdab8 100%);
+  border-color: #c1c101;
+}
+
+
+.stat-green {
+  background: linear-gradient(135deg, #e5fff3 0%, #f3fff9 100%);
+  border-color: #c6f2dc;
+}
+
+.stat-icon {
+  width: 58px;
+  height: 58px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  font-size: 24px;
+  background: white;
+  color: var(--primary);
+}
+
+.stat-label {
+  font-size: 0.9rem;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.stat-value {
+  font-size: 1.65rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.result-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 14px 0;
+  border-bottom: 1px dashed #dfe8ff;
+}
+
+.result-row:last-child {
+  border-bottom: none;
+}
+
+/* ========================================
+   STEPPER / ADMIN
+======================================== */
+.stepper-wrap {
+  position: relative;
+}
+
+.stepper-line {
+  position: absolute;
+  top: 50%;
+  left: 10%;
+  right: 10%;
+  height: 3px;
+  background: #dbe6ff;
+  transform: translateY(-50%);
+  z-index: 0;
+}
+
+.wizard-indicator {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+}
+
+.wizard-dot {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: white;
+  color: var(--muted);
+  border: 2px solid #dbe6ff;
+  font-weight: 700;
+  transition: 0.2s ease;
+}
+
+.wizard-dot.active {
+  background: linear-gradient(135deg, var(--primary), #6e8dff);
+  color: white;
+  border-color: transparent;
+  box-shadow: 0 10px 18px rgba(79, 124, 255, 0.25);
+}
+
+.wizard-step {
+  display: none;
+}
+
+.wizard-step.active {
+  display: block;
+}
+
+/* ========================================
+   CARDS / TABLE-LIKE BLOCKS
+======================================== */
+.question-card,
+.exam-card,
+.table-card,
+.announcement-card {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  box-shadow: 0 8px 24px rgba(56, 87, 153, 0.05);
+}
+
+.question-card,
+.exam-card,
+.table-card {
+  margin-bottom: 16px;
+}
+
+.question-card h6,
+.exam-card h6 {
+  font-weight: 700;
+  color: var(--primary-dark);
+  margin-bottom: 14px;
+}
+
+/* ========================================
+   EXAM
+======================================== */
+.exam-mode-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.exam-mode-option {
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 14px;
+  padding: 12px;
+  cursor: pointer;
+  transition: 0.2s ease;
+  text-align: center;
+  font-weight: 600;
+  color: var(--text);
+  box-shadow: 0 6px 16px rgba(56, 87, 153, 0.05);
+}
+
+.exam-mode-option:hover {
+  background: #eef4ff;
+  border-color: #b8ccff;
+}
+
+.exam-mode-option.active {
+  background: linear-gradient(135deg, var(--primary), #6e8dff);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 10px 20px rgba(79, 124, 255, 0.22);
+}
+
+.empty-mode-note {
+  padding: 12px 14px;
+  border: 1px dashed #c8d8ff;
+  border-radius: 14px;
+  color: var(--muted);
+  background: #f8fbff;
+  font-size: 14px;
+}
+
+.exam-modal-content {
+  border: none;
+  border-radius: 24px;
+  overflow: hidden;
+  background: #f8fbff;
+}
+
+.exam-modal-header,
+.exam-modal-footer {
+  background: #ffffff;
+  border-color: #e6edff;
+}
+
+.exam-modal-header {
+  align-items: flex-start;
+}
+
+.exam-modal-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.exam-slide-card {
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  padding: 22px;
+  box-shadow: 0 10px 24px rgba(56, 87, 153, 0.06);
+}
+
+.exam-modal-content .modal-body {
+  background-size: cover;
+  background-image: url('https://e0.pxfuel.com/wallpapers/200/340/desktop-wallpaper-notebook-background-powerpoint-background-for-powerpoint-templates-notebook-paper.jpg');
+}
+
+#examProgressText {
+  text-align: right;
+}
+
+.exam-question-badge {
+  display: none;
+}
+
+.exam-question-text {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 18px;
+  text-shadow: 1px 0.5px rgb(178, 194, 4);
+}
+
+.exam-progress-text {
+  font-weight: 600;
+  color: var(--primary-dark);
+  margin-bottom: 4px;
+}
+
+.exam-top-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--primary), #6e8dff);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 8px 18px rgba(79, 124, 255, 0.16);
+}
+
+.exam-top-badge-soft {
+  background: #edf3ff;
+  color: var(--primary-dark);
+  box-shadow: none;
+}
+
+.carousel-item {
+  min-height: 320px;
+}
+
+.form-check {
+  background: #f9fbff;
+  border: 1px solid #e3ebff;
+  border-radius: 14px;
+  padding: 12px 14px 12px 38px;
+  margin-bottom: 10px;
+  transition: 0.2s ease;
+}
+
+.form-check:hover {
+  background: #eef4ff;
+  border-color: #c9d9ff;
+}
+
+.form-check-input {
+  margin-top: 0.25rem;
+}
+
+/* ========================================
+   ANNOUNCEMENTS
+======================================== */
+.announcement-textarea {
+  min-height: 120px;
+  resize: vertical;
+  padding: 14px 16px;
+}
+
+.announcement-card {
+  margin-bottom: 14px;
+}
+
+.announcement-card:last-child {
+  margin-bottom: 0;
+}
+
+.announcement-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.announcement-avatar {
+  width: 46px;
+  height: 46px;
+  min-width: 46px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  color: white;
+  background: linear-gradient(135deg, var(--primary), #6e8dff);
+  box-shadow: 0 8px 20px rgba(79, 124, 255, 0.22);
+}
+
+.announcement-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.announcement-author-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.announcement-email {
+  color: var(--muted);
+  font-size: 0.8rem;
+  word-break: break-word;
+}
+
+.announcement-submeta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-top: 4px;
+}
+
+.announcement-message {
+  white-space: pre-wrap;
+  line-height: 1.6;
+  color: var(--text);
+  margin-bottom: 14px;
+}
+
+.announcement-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.reaction-btn {
+  border: 1px solid var(--border);
+  background: #f8fbff;
+  color: var(--text);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-weight: 600;
+  transition: 0.2s ease;
+}
+
+.reaction-btn:hover {
+  background: #eef4ff;
+  border-color: #b8ccff;
+}
+
+.reaction-btn.active {
+  background: linear-gradient(135deg, var(--primary), #6e8dff);
+  border-color: transparent;
+  color: white;
+}
+
+.reaction-btn.dislike.active {
+  background: linear-gradient(135deg, var(--danger), #ff6f91);
+}
+
+.reaction-count {
+  display: inline-block;
+  margin-left: 6px;
+  font-weight: 700;
+}
+
+#announcementList {
+  max-height: 500px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+#announcementList::-webkit-scrollbar {
+  width: 8px;
+}
+
+#announcementList::-webkit-scrollbar-thumb {
+  background: #c9d9ff;
+  border-radius: 999px;
+}
+
+#announcementList::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ========================================
+   LEADERBOARD / RANKINGS
+======================================== */
+.live-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #22b573;
+  margin-right: 6px;
+  box-shadow: 0 0 0 6px rgba(34, 181, 115, 0.12);
+}
+
+.chart-wrap {
+  position: relative;
+  width: 100%;
+  
+}
+
+.ranking-table-wrap {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.ranking-table {
+  margin-bottom: 0;
+}
+
+.ranking-table thead th {
+  background: #f8fbff;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+  padding: 14px 16px;
+  white-space: nowrap;
+}
+
+.ranking-table tbody td {
+  padding: 14px 16px;
+  border-bottom: 1px solid #eef3ff;
+  background: #fff;
+  vertical-align: middle;
+}
+
+.ranking-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.ranking-table tbody tr:hover td {
+  background: #fbfdff;
+}
+
+.ranking-strong {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.email-cell {
+  width: 100%;
+  max-width: 220px;
+  min-width: 0;
+}
+
+.email-text {
+  display: inline-block;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--text);
+  font-size: .75rem;
+  vertical-align: middle;
+}
+
+.medal-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 68px;
+  height: 34px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  box-shadow: none;
+  flex-shrink: 0;
+}
+
+.medal-gold {
+  background: #fff3cd;
+  color: #8a6500;
+  border-color: #ffe08a;
+}
+
+.medal-silver {
+  background: #f1f3f5;
+  color: #495057;
+  border-color: #dde2e6;
+}
+
+.medal-bronze {
+  background: #f9e3d7;
+  color: #7a4423;
+  border-color: #efc7b0;
+}
+
+.medal-default {
+  background: #edf3ff;
+  color: var(--primary-dark);
+  border-color: #d6e3ff;
+}
+
+.leader-gold td {
+  background: #fffdf4;
+}
+
+.leader-silver td {
+  background: #fcfcfd;
+}
+
+.leader-bronze td {
+  background: #fffaf7;
+}
+
+.my-rank-row {
+  position: relative;
+}
+
+.my-rank-row td {
+  background: #f5f9ff !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.my-rank-row td:first-child {
+  border-left: 3px solid var(--primary);
+}
+
+#yourRankCard {
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.your-rank-clean {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 18px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.your-rank-clean-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.your-rank-clean-main {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  margin-bottom: 6px;
+}
+
+.your-rank-clean-sub {
+  font-size: 0.92rem;
+  color: var(--muted);
+  word-break: break-word;
+}
+
+.your-rank-clean-stats {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.your-rank-clean-stat {
+  min-width: 110px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #f8fbff;
+  border: 1px solid #e8efff;
+}
+
+.your-rank-clean-stat-value {
+  display: block;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 3px;
+}
+
+.your-rank-clean-stat-label {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+/* ========================================
+   RESPONSIVE
+======================================== */
+@media (max-width: 768px) {
+  .last-taken-small {
+    font-size: .75rem !important;
+  }
+  .auth-card,
+  .school-panel {
+    padding: 18px;
+  }
+
+  .auth-title {
+    font-size: 1.6rem;
+  }
+
+  .section-title {
+    font-size: 1.3rem;
+  }
+
+  .stat-card {
+    min-height: auto;
+  }
+
+  .wizard-indicator {
+    gap: 12px;
+  }
+
+  .wizard-dot {
+    width: 38px;
+    height: 38px;
+  }
+
+  .exam-mode-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .exam-slide-card {
+    padding: 16px;
+  }
+
+  .email-cell {
+    max-width: 110px;
+  }
+
+  .medal-badge {
+    width: 64px;
+    height: 32px;
+    font-size: 0.76rem;
+  }
+
+  .your-rank-clean {
+    padding: 16px;
+  }
+
+  .your-rank-clean-stats {
+    width: 100%;
+  }
+
+  .your-rank-clean-stat {
+    flex: 1 1 100px;
+    min-width: 96px;
+  }
+
+  .ranking-table-wrap {
+    border: none;
+    background: transparent;
+    overflow: visible;
+  }
+
+  .ranking-table,
+  .ranking-table thead,
+  .ranking-table tbody,
+  .ranking-table th,
+  .ranking-table td,
+  .ranking-table tr {
+    display: block;
+    width: 100%;
+  }
+
+  .ranking-table thead {
+    display: none;
+  }
+
+  .ranking-table tbody {
+    display: grid;
+    gap: 14px;
+  }
+
+  .ranking-table tbody tr {
+    position: relative;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 14px 16px;
+    box-shadow: 0 8px 20px rgba(56, 87, 153, 0.06);
+    overflow: hidden;
+  }
+
+  .ranking-table tbody td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    margin: 0;
+    padding: 10px 0;
+    border: 0 !important;
+    border-bottom: 1px dashed #e8efff !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+    text-align: right;
+    font-size: 0.92rem;
+  }
+
+  .ranking-table tbody td:first-child {
+    padding-top: 0;
+  }
+
+  .ranking-table tbody td:last-child {
+    border-bottom: 0 !important;
+    padding-bottom: 0;
+  }
+
+  .ranking-table tbody td::before {
+    content: attr(data-label);
+    flex: 0 0 92px;
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .ranking-table tbody td[data-label="Email"] {
+    display: grid;
+    grid-template-columns: 92px minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+  }
+
+  .ranking-table tbody td[data-label="Email"]::before {
+    min-width: 0;
+  }
+
+  .ranking-table tbody td[data-label="Email"] .email-text {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin-left: 0;
+    text-align: left;
+  }
+
+  .ranking-table tbody tr.leader-gold {
+    background: #fffdf4;
+    border-color: #f5df9b;
+  }
+
+  .ranking-table tbody tr.leader-silver {
+    background: #fcfcfd;
+    border-color: #dde2e6;
+  }
+
+  .ranking-table tbody tr.leader-bronze {
+    background: #fffaf7;
+    border-color: #efc7b0;
+  }
+
+  .ranking-table tbody tr.my-rank-row {
+    background: #f5f9ff;
+    border-color: #cfe0ff;
+  }
+
+  .ranking-table tbody tr.my-rank-row::before {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 4px;
+    background: linear-gradient(180deg, var(--primary), #7da0ff);
+    border-radius: 18px 0 0 18px;
+  }
+
+  .my-rank-row td:first-child {
+    border-left: 0 !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .ranking-table tbody td::before {
+    flex: 0 0 72px;
+    font-size: 0.7rem;
+  }
+
+  .ranking-table tbody td[data-label="Email"] {
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 10px;
+  }
+  span.email-text {
+    text-align: right !important;
+  }
+  .email-cell {
+    max-width: none;
+  }
+}
+
+#usernameSetupModal > div {
+  min-height: 50dvh !important; 
+}
+
+/* ===== Practice vs Official ===== */
+
+.exam-mode-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.exam-mode-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.exam-mode-group-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 14px;
+}
+
+.practice-head {
+  background: linear-gradient(135deg, #959aff 0%, #fffdf6 100%);
+  border: 1px solid #dfe8ff;
+}
+
+.official-head {
+  background: linear-gradient(135deg, #ffc795 0%, #fffdf6 100%);
+  border: 1px solid #ffe0a3;
+}
+
+.exam-mode-group-title {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text);
+}
+
+.exam-mode-group-note {
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--muted);
+  text-shadow: .55px .25px .15px #400000;
+}
+
+.exam-mode-group-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.exam-mode-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 136px;
+  padding: 16px 14px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  text-align: center;
+  cursor: pointer;
+  transition: 0.2s ease;
+  box-shadow: 0 6px 16px rgba(56, 87, 153, 0.05);
+}
+
+.exam-mode-title {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.exam-mode-subtext {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.45;
+  opacity: 0.92;
+}
+
+.exam-mode-option.practice-mode {
+  background: #fff;
+  border-color: #dfe8ff;
+}
+
+.exam-mode-option.official-mode {
+  background: linear-gradient(135deg, #fffaf0 0%, #fffdf7 100%);
+  border-color: #ffe0a3;
+}
+
+.exam-mode-option.practice-mode:hover {
+  background: #eef4ff;
+  border-color: #b8ccff;
+}
+
+.exam-mode-option.official-mode:hover {
+  background: linear-gradient(135deg, #fff5d8 0%, #fffaf0 100%);
+  border-color: #ffd27a;
+}
+
+.exam-mode-option.active.practice-mode {
+  background: linear-gradient(135deg, var(--primary), #6e8dff);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 10px 20px rgba(79, 124, 255, 0.22);
+}
+
+.exam-mode-option.active.official-mode {
+  background: linear-gradient(135deg, var(--secondary), #ffd257);
+  color: #4b3700;
+  border-color: transparent;
+  box-shadow: 0 10px 20px rgba(255, 183, 3, 0.22);
+}
+
+@media (max-width: 768px) {
+  .exam-mode-group-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .exam-mode-group-head {
+    padding: 10px 12px;
+  }
+
+  .exam-mode-group-title {
+    font-size: 0.96rem;
+  }
+
+  .exam-mode-group-note {
+    font-size: 0.78rem;
+  }
+
+  .exam-mode-option {
+    min-height: 128px;
+    padding: 14px 12px;
+  }
+
+  .exam-mode-title {
+    font-size: 0.95rem;
+  }
+
+  .exam-mode-subtext {
+    font-size: 0.78rem;
+  }
+}
+
+/* ===== Modern stacked alerts ===== */
+
+.global-alert-wrap {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2000;
+  width: min(760px, calc(100% - 24px));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.global-alert-wrap .alert {
+  pointer-events: auto;
+}
+
+.alert-modern {
+  border: 1px solid transparent;
+  border-radius: 18px;
+  padding: 0;
+  margin-bottom: 0;
+  overflow: hidden;
+  box-shadow: 0 14px 30px rgba(56, 87, 153, 0.14);
+  backdrop-filter: blur(10px);
+}
+
+.alert-modern-inner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 14px;
+  padding: 16px 18px;
+}
+
+.alert-modern-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.alert-modern-content {
+  min-width: 0;
+}
+
+.alert-modern-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 4px;
+}
+
+.alert-modern-message {
+  font-size: 0.95rem;
+  line-height: 1.5;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.alert-modern-message a {
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.alert-modern-close {
+  margin: 0;
+  padding: 0.25rem;
+  opacity: 0.55;
+  align-self: start;
+}
+
+.alert-modern-close:hover {
+  opacity: 0.9;
+}
+
+/* Success */
+.alert-modern.alert-success {
+  background: rgba(232, 255, 243, 0.96);
+  border-color: #bdebd2;
+  color: #117a4e;
+}
+
+.alert-modern.alert-success .alert-modern-icon {
+  background: rgba(17, 122, 78, 0.1);
+  color: #117a4e;
+}
+
+/* Danger */
+.alert-modern.alert-danger {
+  background: rgba(255, 240, 244, 0.97);
+  border-color: #f5c5d3;
+  color: #b4234a;
+}
+
+.alert-modern.alert-danger .alert-modern-icon {
+  background: rgba(180, 35, 74, 0.1);
+  color: #b4234a;
+}
+
+/* Warning */
+.alert-modern.alert-warning {
+  background: rgba(255, 248, 225, 0.97);
+  border-color: #f2dea0;
+  color: #8a6500;
+}
+
+.alert-modern.alert-warning .alert-modern-icon {
+  background: rgba(138, 101, 0, 0.1);
+  color: #8a6500;
+}
+
+/* Info */
+.alert-modern.alert-info {
+  background: rgba(237, 243, 255, 0.97);
+  border-color: #cfe0ff;
+  color: #345de6;
+}
+
+.alert-modern.alert-info .alert-modern-icon {
+  background: rgba(52, 93, 230, 0.1);
+  color: #345de6;
+}
+/* ===== Alert Animations ===== */
+
+.fade-in {
+  animation: alertFadeIn 0.35s ease forwards;
+}
+
+.fade-out {
+  animation: alertFadeOut 0.4s ease forwards;
+}
+
+@keyframes alertFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes alertFadeOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.96);
+  }
+}
+
+#dashTotalExams, #dashSubjectsTaken {
+  color: #345de6 !important;
+  text-shadow: 1px .65px #e1eb26, 2px 1px #eb2626;
+}
+@media (max-width: 480px) {
+  #loginEmail {
+    font-size: .85rem;
+  }
+  .exam-mode-group-grid {
+    grid-template-columns: 1fr;
+  }
+  .exam-mode-option {
+    min-height: 116px;
+  }
+  .exam-modal-footer button {
+    font-size: .75rem;
+    width: 35vw;
+    padding: .65rem .15rem;
+  }
+  *.alert-modern-inner {
+    padding: 0;
+  }
+  *.alert-modern-message {
+    font-size: .85rem;
+  }
+  .table-card > div span {
+    color: #5877ff !important;
+    font-weight: bold;
+  }
+  :is(.table-card, .result-row) > div :is(strong, span, small) {
+    font-size: .85rem;
+  }
+  .result-row > div > small {
+    font-size: .70rem;
+  }
+  .table-card > .small {
+    font-size: .70rem;
+  }
+  .result-row .text-end small {
+    font-weight: bold;
+  }
+  .result-row .text-end strong {
+    color: #1e8b06 !important;
+    font-size: .75rem;
+  }
+  .result-row .text-end {
+    font-size: .85rem;
+  }
+  .result-row, 
+  .result-row > div:first-child > *,
+  .result-row > div:first-child {
+    margin: 0 !important;
+  }
+  .result-row > div {
+    display: flex !important;
+    flex-direction: column;
+  }
+  .inner-panel h6 {
+    color: #ab6125 !important;
+    text-shadow: .75px .65px #3e0101;
+  }
+  #rankingSection .px-3 {
+    font-size: .75rem;
+    text-align: justify;
+  }
+  .your-rank-clean-left .your-rank-clean-label a {
+    text-decoration: none;
+  }
+  .your-rank-clean-left .your-rank-clean-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .your-rank-clean-left {
+    width: 100%;
+  }
+  .ranking-strong {
+    color: #03b028 !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .ranking-table-wrap {
+    border: none;
+    background: transparent;
+    overflow: visible;
+  }
+
+  .ranking-table,
+  .ranking-table thead,
+  .ranking-table tbody,
+  .ranking-table tr {
+    display: block;
+    width: 100%;
+  }
+
+  .ranking-table thead {
+    display: none;
+  }
+
+  .ranking-table tbody {
+    display: grid;
+    gap: 12px;
+  }
+
+  .ranking-table tbody tr {
+    display: block;
+    position: relative;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 0;
+    box-shadow: 0 8px 20px rgba(56, 87, 153, 0.06);
+    overflow: hidden;
+  }
+
+  /* hide normal table cells on very small screens */
+  .ranking-table tbody tr > td:not(.ranking-mobile-details-cell) {
+    display: none !important;
+  }
+
+  .ranking-mobile-details-cell {
+    display: block !important;
+    width: 100%;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+  }
+
+  .ranking-mobile-summary {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    text-align: left;
+  }
+
+  .ranking-mobile-summary-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .ranking-mobile-badge .medal-badge {
+    width: 60px;
+    height: 30px;
+    font-size: 0.74rem;
+  }
+
+  .ranking-mobile-user {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--text);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ranking-mobile-summary-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .ranking-mobile-avg {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #03b028;
+  }
+
+  .ranking-mobile-chevron {
+    font-size: 0.9rem;
+    color: var(--muted);
+    transition: transform 0.2s ease;
+  }
+
+  .ranking-mobile-summary[aria-expanded="true"] .ranking-mobile-chevron {
+    transform: rotate(180deg);
+  }
+
+  .ranking-mobile-collapse {
+    border-top: 1px dashed #e8efff;
+  }
+
+  .ranking-mobile-detail-grid {
+    display: grid;
+    gap: 10px;
+    padding: 12px 14px 14px;
+  }
+
+  .ranking-mobile-detail-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    background: #f8fbff;
+    border: 1px solid #e8efff;
+    border-radius: 12px;
+    padding: 10px 12px;
+  }
+
+  .ranking-mobile-detail-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--muted);
+  }
+
+  .ranking-mobile-detail-value {
+    font-size: 0.84rem;
+    font-weight: 700;
+    color: var(--text);
+    text-align: right;
+  }
+
+  .ranking-table tbody tr.leader-gold {
+    background: #fffdf4;
+    border-color: #f5df9b;
+  }
+
+  .ranking-table tbody tr.leader-silver {
+    background: #fcfcfd;
+    border-color: #dde2e6;
+  }
+
+  .ranking-table tbody tr.leader-bronze {
+    background: #fffaf7;
+    border-color: #efc7b0;
+  }
+
+  .ranking-table tbody tr.my-rank-row {
+    background: #f5f9ff;
+    border-color: #cfe0ff;
+  }
+
+  .ranking-table tbody tr.my-rank-row::before {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 4px;
+    background: linear-gradient(180deg, var(--primary), #7da0ff);
+    border-radius: 18px 0 0 18px;
+  }
+}
+/* ===== Subject Picker ===== */
+
+.subject-picker {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 4px 2px 8px;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+
+.subject-picker::-webkit-scrollbar {
+  height: 8px;
+}
+
+.subject-picker::-webkit-scrollbar-thumb {
+  background: #c9d9ff;
+  border-radius: 999px;
+}
+
+.subject-picker::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.subject-chip {
+  flex: 0 0 auto;
+  min-width: 120px;
+  max-width: 180px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  text-align: center;
+  cursor: pointer;
+  transition: 0.2s ease;
+  box-shadow: 0 6px 16px rgba(56, 87, 153, 0.05);
+  scroll-snap-align: start;
+}
+
+.subject-chip-title {
+  display: block;
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.subject-chip.active {
+  background: linear-gradient(135deg, var(--primary), #6e8dff);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 10px 20px rgba(79, 124, 255, 0.22);
+  transform: translateY(-1px);
+}
+
+.subject-chip.inactive {
+  opacity: 0.55;
+  filter: grayscale(0.08);
+}
+
+.subject-chip:hover.inactive {
+  opacity: 0.82;
+  border-color: #b8ccff;
+  background: #eef4ff;
+}
+
+@media (max-width: 480px) {
+  .subject-chip {
+    min-width: 108px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    border: dotted;
+  }
+
+  .subject-chip-title {
+    font-size: 0.85rem;
+  }
+  .exam-mode-group-grid {
+    display: flex;
+  }
+}
+
+header a {
+  text-decoration: none;
+}
+header{
+  background: url('https://img.freepik.com/free-photo/solid-painted-concrete-wall-textured-backdrop_53876-110679.jpg');
+  background-size: cover;
+}
