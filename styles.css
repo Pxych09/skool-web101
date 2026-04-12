@@ -269,7 +269,9 @@ body {
   color: white;
   font-size: 22px;
 }
-
+.rounded-xl {
+  border-radius: var(--radius-xl);
+}
 .school-panel {
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid white;
@@ -1928,12 +1930,4 @@ body {
   .exam-mode-group-grid {
     display: flex;
   }
-}
-
-header a {
-  text-decoration: none;
-}
-header{
-  background: url('https://img.freepik.com/free-photo/solid-painted-concrete-wall-textured-backdrop_53876-110679.jpg');
-  background-size: cover;
 }
