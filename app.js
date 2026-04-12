@@ -37,6 +37,7 @@ const state = {
   usernameModalInstance: null,
   sessionWatcherStarted: false,
   sessionCheckInterval: null,
+  official50AttemptsBySubject: {},
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -377,21 +378,40 @@ function renderExamSubjectPicker() {
   }
 
   picker.innerHTML = state.subjects.map(item => {
-    const isActive = state.selectedExamSubject === item.subject;
+    const subject = item.subject;
+    const isActive = state.selectedExamSubject === subject;
+    const officialAttempts = Number(state.official50AttemptsBySubject?.[subject] || 0);
+    const isLocked = officialAttempts >= 2;
+    const isAvailable = !isLocked && officialAttempts === 0;
+
     return `
       <button
         type="button"
-        class="subject-chip ${isActive ? 'active' : 'inactive'}"
-        data-subject="${escapeHtml(item.subject)}"
+        class="subject-chip 
+        ${isActive ? 'active' : 'inactive'} 
+        ${isLocked ? 'locked' : ''} 
+        ${isAvailable ? 'available' : ''}"
+        data-subject="${escapeHtml(subject)}"
         aria-pressed="${isActive ? 'true' : 'false'}"
+        ${isLocked ? 'disabled' : ''}
+        title="${isLocked ? 'Maximum of 2 official 50-item attempts reached for this subject.' : subject}"
       >
-        <span class="subject-chip-title">${escapeHtml(item.subject)}</span>
+        <span class="subject-chip-title">${escapeHtml(subject)}</span>
+        <small class="subject-chip-meta">
+          ${isLocked
+            ? 'Locked • 2 official attempts used'
+            : officialAttempts > 0
+              ? `${officialAttempts}/2 official attempts used`
+              : '<span class="available-sub">Available</span>'}
+        </small>
       </button>
     `;
   }).join('');
 
   picker.querySelectorAll('.subject-chip').forEach(btn => {
     btn.addEventListener('click', async () => {
+      if (btn.disabled) return;
+
       const subject = btn.dataset.subject || '';
       if (!subject) return;
 
@@ -412,6 +432,8 @@ async function loadDashboard() {
   if (!data.success) throw new Error(data.message || 'Failed to load dashboard.');
 
   const dash = data.data;
+  state.official50AttemptsBySubject = dash.official50AttemptsBySubject || {};
+  renderExamSubjectPicker();
 
   $('dashTotalExams').textContent = dash.totalExamsTaken || 0;
   $('dashSubjectsTaken').textContent = (dash.subjectsTaken || []).length;
@@ -924,7 +946,7 @@ async function handleStudentSubjectChange(e) {
   const subject = e.target.value;
   state.selectedExamSubject = subject;
   renderExamSubjectPicker();
-  
+
   state.selectedExamMode = null;
   state.fullSubjectQuestions = [];
   $('selectedExamSetupText').textContent = 'No setup selected yet.';
@@ -1106,6 +1128,13 @@ async function handleLoadExam() {
     const subject = $('examSubjectSelect').value;
     if (!subject) throw new Error('Please select a subject.');
     if (!state.selectedExamMode) throw new Error('Please choose an exam type first.');
+    
+    const isOfficial50 = state.selectedExamMode?.isOfficial && Number(state.selectedExamMode?.count || 0) >= 50;
+    const usedAttempts = Number(state.official50AttemptsBySubject?.[subject] || 0);
+
+    if (isOfficial50 && usedAttempts >= 2) {
+      throw new Error(`You already used the maximum 2 official 50-item attempts for ${subject}.`);
+    }
 
     setLoading(true);
 
