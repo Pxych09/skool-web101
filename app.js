@@ -2,9 +2,17 @@ window.APP_CONFIG = {
   API_URL: "https://script.google.com/macros/s/AKfycbwO4odNrbx0XKB8lOPwckkWtbD42LRPvvbSL2izBbr9d5WD2_e0uq32H3ls7rrDURge/exec"
 };
 
+/* =========================
+   APP CONSTANTS
+========================= */
 const $ = (id) => document.getElementById(id);
 const API_URL = window.APP_CONFIG.API_URL;
+const SESSION_KEY = 'schoolAppSession';
+const SESSION_TIMEOUT = 60 * 60 * 1000; // 1 hour
 
+/* =========================
+   APP STATE
+========================= */
 const state = {
   currentUser: null,
   subjects: [],
@@ -27,12 +35,18 @@ const state = {
   rankingRefreshTimer: null,
   pendingLoginUser: null,
   usernameModalInstance: null,
+  sessionWatcherStarted: false,
+  sessionCheckInterval: null,
 };
 
 document.addEventListener('DOMContentLoaded', () => {
   bindEvents();
+  restoreSession();
 });
 
+/* =========================
+   EVENT BINDINGS
+========================= */
 function bindEvents() {
   $('btnLogin').addEventListener('click', handleLogin);
   $('btnLogout').addEventListener('click', handleLogout);
@@ -61,13 +75,14 @@ function bindEvents() {
 
   $('btnPostAnnouncement').addEventListener('click', handlePostAnnouncement);
   $('btnRefreshAnnouncements').addEventListener('click', loadAnnouncements);
+
   $('rankingViewType').addEventListener('change', handleRankingViewChange);
   $('btnLoadRankings').addEventListener('click', loadRankings);
-  $('btnSaveUsername').addEventListener('click', handleSaveUsername);
-
   $('rankingSubjectSelect').addEventListener('change', (e) => {
     state.rankingSubject = e.target.value;
   });
+
+  $('btnSaveUsername').addEventListener('click', handleSaveUsername);
 
   const examCarouselEl = $('examCarousel');
   if (examCarouselEl) {
@@ -75,6 +90,9 @@ function bindEvents() {
   }
 }
 
+/* =========================
+   AUTH / LOGIN
+========================= */
 async function handleLogin() {
   try {
     const email = $('loginEmail').value.trim().toLowerCase();
@@ -106,6 +124,7 @@ async function handleLogin() {
 }
 
 async function completeLogin(userData) {
+  saveSession(userData);
   state.currentUser = userData;
   state.pendingLoginUser = null;
 
@@ -114,7 +133,6 @@ async function completeLogin(userData) {
 
   const displayName = userData.username || userData.email;
   $('userInfoText').textContent = `${displayName} | ${state.currentUser.role}`;
-  $('dashRole').textContent = state.currentUser.role;
 
   if (state.currentUser.role === 'Admin') {
     $('adminSection').classList.remove('d-none');
@@ -130,6 +148,8 @@ async function completeLogin(userData) {
   await loadRankings();
   startAutoRefresh();
   await loadAnnouncements();
+  startSessionWatcher();
+
   showLoginAlert(`Welcome, ${escapeHtml(displayName)}!`, 'success');
 }
 
@@ -169,6 +189,8 @@ async function handleSaveUsername() {
 }
 
 function handleLogout() {
+  clearSession();
+
   state.currentUser = null;
   state.subjects = [];
   state.loadedExamQuestions = [];
@@ -185,7 +207,7 @@ function handleLogout() {
   state.rankings = [];
   state.rankingViewType = 'overall';
   state.rankingSubject = '';
-  
+  state.pendingLoginUser = null;
 
   $('loginSection').classList.remove('d-none');
   $('appSection').classList.add('d-none');
@@ -215,8 +237,103 @@ function handleLogout() {
   updateAdminWizard();
   stopAutoRefresh();
   destroyRankingChart();
+  stopSessionWatcher();
 }
 
+/* =========================
+   SESSION HELPERS
+========================= */
+function saveSession(user) {
+  const session = {
+    user,
+    lastActivity: Date.now()
+  };
+  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+}
+
+function getSession() {
+  const raw = localStorage.getItem(SESSION_KEY);
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function clearSession() {
+  localStorage.removeItem(SESSION_KEY);
+}
+
+function updateSessionActivity() {
+  const session = getSession();
+  if (!session) return;
+
+  session.lastActivity = Date.now();
+
+  if (state.currentUser) {
+    session.user = state.currentUser;
+  }
+
+  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+}
+
+function restoreSession() {
+  const session = getSession();
+  if (!session || !session.user) return;
+
+  const now = Date.now();
+
+  if (now - session.lastActivity > SESSION_TIMEOUT) {
+    clearSession();
+    return;
+  }
+
+  completeLogin(session.user);
+}
+
+function startSessionWatcher() {
+  if (state.sessionWatcherStarted) return;
+  state.sessionWatcherStarted = true;
+
+  const events = ['click', 'keydown', 'mousemove', 'scroll', 'touchstart'];
+
+  events.forEach(event => {
+    document.addEventListener(event, updateSessionActivity, { passive: true });
+  });
+
+  state.sessionCheckInterval = setInterval(() => {
+    const session = getSession();
+    if (!session) return;
+
+    const now = Date.now();
+    if (now - session.lastActivity > SESSION_TIMEOUT) {
+      handleAutoLogout();
+    }
+  }, 30000);
+}
+
+function stopSessionWatcher() {
+  if (state.sessionCheckInterval) {
+    clearInterval(state.sessionCheckInterval);
+    state.sessionCheckInterval = null;
+  }
+  state.sessionWatcherStarted = false;
+}
+
+function handleAutoLogout() {
+  clearSession();
+  showGlobalAlert('Session expired. Please log in again.', 'warning');
+
+  setTimeout(() => {
+    location.reload();
+  }, 1000);
+}
+
+/* =========================
+   SUBJECTS / DASHBOARD
+========================= */
 async function loadSubjects() {
   const res = await fetch(`${API_URL}?action=getSubjects`);
   const data = await res.json();
@@ -230,6 +347,7 @@ async function loadSubjects() {
 function renderSubjects() {
   const adminSelect = $('subjectSelect');
   const examSelect = $('examSubjectSelect');
+  const examPicker = $('examSubjectPicker');
 
   adminSelect.innerHTML = `<option value="">Select Subject</option>`;
   examSelect.innerHTML = `<option value="">Select Subject</option>`;
@@ -244,6 +362,45 @@ function renderSubjects() {
     opt2.value = item.subject;
     opt2.textContent = item.subject;
     examSelect.appendChild(opt2);
+  });
+
+  renderExamSubjectPicker();
+}
+
+function renderExamSubjectPicker() {
+  const picker = $('examSubjectPicker');
+  if (!picker) return;
+
+  if (!state.subjects.length) {
+    picker.innerHTML = `<div class="empty-mode-note">No subjects available yet.</div>`;
+    return;
+  }
+
+  picker.innerHTML = state.subjects.map(item => {
+    const isActive = state.selectedExamSubject === item.subject;
+    return `
+      <button
+        type="button"
+        class="subject-chip ${isActive ? 'active' : 'inactive'}"
+        data-subject="${escapeHtml(item.subject)}"
+        aria-pressed="${isActive ? 'true' : 'false'}"
+      >
+        <span class="subject-chip-title">${escapeHtml(item.subject)}</span>
+      </button>
+    `;
+  }).join('');
+
+  picker.querySelectorAll('.subject-chip').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const subject = btn.dataset.subject || '';
+      if (!subject) return;
+
+      state.selectedExamSubject = subject;
+      $('examSubjectSelect').value = subject;
+
+      renderExamSubjectPicker();
+      await handleStudentSubjectChange({ target: { value: subject } });
+    });
   });
 }
 
@@ -263,6 +420,52 @@ async function loadDashboard() {
   renderRecentResults(dash.recentResults || []);
 }
 
+function renderAverages(items) {
+  const box = $('averagesContainer');
+
+  if (!items.length) {
+    box.innerHTML = `<div class="table-card">No subject averages yet.</div>`;
+    return;
+  }
+
+  box.innerHTML = items.map(item => `
+    <div class="table-card">
+      <div class="d-flex justify-content-between">
+        <strong>${escapeHtml(item.subject)}</strong>
+        <span>${item.averagePercentage}%</span>
+      </div>
+      <div class="small text-muted-school">
+        Average Score: ${item.averageScore} | Attempts: ${item.attempts}
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderRecentResults(items) {
+  const box = $('recentResultsContainer');
+
+  if (!items.length) {
+    box.innerHTML = `<div class="table-card">No exam history yet.</div>`;
+    return;
+  }
+
+  box.innerHTML = items.map(item => `
+    <div class="result-row">
+      <div>
+        <strong>${escapeHtml(item.subject)}</strong>
+        <small class="text-muted-school">${formatDate(item.dateTaken)}</small>
+      </div>
+      <div class="text-end">
+        <strong>${item.score}/${item.totalItems}</strong>
+        <small>${item.percentage}%</small>
+      </div>
+    </div>
+  `).join('');
+}
+
+/* =========================
+   LEADERBOARD
+========================= */
 function renderRankingSubjects() {
   const select = $('rankingSubjectSelect');
   if (!select) return;
@@ -340,8 +543,8 @@ function renderRankingTable() {
   if (!items.length) {
     const isSubject = state.rankingViewType === 'subject';
     const message = isSubject
-    ? `No official leaderboard data yet for subject: ${state.rankingSubject || '(none selected)'}. Only exams with 20+ items count.`
-    : 'No official leaderboard data yet. Only exams with 20+ items count.';
+      ? `No official leaderboard data yet for subject: ${state.rankingSubject || '(none selected)'}. Only exams with 20+ items count.`
+      : 'No official leaderboard data yet. Only exams with 20+ items count.';
 
     box.innerHTML = `<div class="empty-mode-note">${message}</div>`;
     return;
@@ -360,10 +563,11 @@ function renderRankingTable() {
           </tr>
         </thead>
         <tbody>
-          ${items.map(item => {
+          ${items.map((item, index) => {
             const rowClass = getRankingRowClass(item, myEmail);
+            const collapseId = `rankDetails_${index}`;
             return `
-              <tr class="${rowClass}">
+              <tr class="${rowClass} ranking-row-expandable" data-rank-row>
                 <td data-label="Rank">${renderRankBadge(item.rank)}</td>
                 <td class="email-cell" data-label="Username">
                   <span class="email-text" title="${escapeHtml(item.username || item.email || '')}">
@@ -371,9 +575,41 @@ function renderRankingTable() {
                   </span>
                 </td>
                 <td class="ranking-strong" data-label="Avg %">${item.averagePercentage}%</td>
-                <td data-label="Attempts">${item.attempts}</td>
-                <td class="last-taken-small" data-label="Last Taken" title="${escapeHtml(new Date(item.lastTaken).toLocaleString())}">
+                <td class="ranking-extra-cell" data-label="Attempts">${item.attempts}</td>
+                <td class="last-taken-small ranking-extra-cell" data-label="Last Taken" title="${escapeHtml(new Date(item.lastTaken).toLocaleString())}">
                   ${escapeHtml(formatDate(item.lastTaken))}
+                </td>
+                <td class="ranking-mobile-details-cell" colspan="5">
+                  <button
+                    class="ranking-mobile-summary"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#${collapseId}"
+                    aria-expanded="false"
+                    aria-controls="${collapseId}"
+                  >
+                    <span class="ranking-mobile-summary-left">
+                      <span class="ranking-mobile-badge">${renderRankBadge(item.rank)}</span>
+                      <span class="ranking-mobile-user">${escapeHtml(item.username || item.email || '')}</span>
+                    </span>
+                    <span class="ranking-mobile-summary-right">
+                      <span class="ranking-mobile-avg">${item.averagePercentage}%</span>
+                      <i class="bi bi-chevron-down ranking-mobile-chevron"></i>
+                    </span>
+                  </button>
+
+                  <div class="collapse ranking-mobile-collapse" id="${collapseId}">
+                    <div class="ranking-mobile-detail-grid">
+                      <div class="ranking-mobile-detail-item">
+                        <span class="ranking-mobile-detail-label">Attempts</span>
+                        <span class="ranking-mobile-detail-value">${item.attempts}</span>
+                      </div>
+                      <div class="ranking-mobile-detail-item">
+                        <span class="ranking-mobile-detail-label">Last Taken</span>
+                        <span class="ranking-mobile-detail-value">${escapeHtml(formatDate(item.lastTaken))}</span>
+                      </div>
+                    </div>
+                  </div>
                 </td>
               </tr>
             `;
@@ -411,37 +647,10 @@ function getRankingRowClass(item, myEmail) {
   return classes.join(' ');
 }
 
-// function truncateEmail(value, maxLength = 18) {
-//   const text = String(value || '');
-//   if (text.length <= maxLength) return text;
-//   return `${text.slice(0, maxLength - 3)}...`;
-// }
-
 function truncateLabel(value, maxLength = 18) {
   const text = String(value || '');
   if (text.length <= maxLength) return text;
   return `${text.slice(0, maxLength - 3)}...`;
-}
-
-function renderAverages(items) {
-  const box = $('averagesContainer');
-
-  if (!items.length) {
-    box.innerHTML = `<div class="table-card">No subject averages yet.</div>`;
-    return;
-  }
-
-  box.innerHTML = items.map(item => `
-    <div class="table-card">
-      <div class="d-flex justify-content-between">
-        <strong>${escapeHtml(item.subject)}</strong>
-        <span>${item.averagePercentage}%</span>
-      </div>
-      <div class="small text-muted-school">
-        Average Score: ${item.averageScore} | Attempts: ${item.attempts}
-      </div>
-    </div>
-  `).join('');
 }
 
 function renderYourRankCard() {
@@ -469,9 +678,8 @@ function renderYourRankCard() {
   box.innerHTML = `
     <div class="your-rank-clean">
       <div class="your-rank-clean-left">
-        <div class="your-rank-clean-label">Your Rank</div>
+        <div class="your-rank-clean-label"><small>Your Rank </small><small><a href="#appSection">@${escapeHtml(me.username || me.email || '')}</a><small></div>
         <div class="your-rank-clean-main">${renderRankBadge(me.rank)}</div>
-        <div class="your-rank-clean-sub">${escapeHtml(me.username || me.email || '')}</div>
       </div>
 
       <div class="your-rank-clean-stats">
@@ -508,7 +716,6 @@ function renderRankingChart() {
   const topItems = (state.rankings || []).slice(0, 5);
   if (!topItems.length) return;
 
-  // const labels = topItems.map(item => truncateEmail(item.email || '', 18));
   const labels = topItems.map(item =>
     truncateLabel(item.username || item.email || '', 18)
   );
@@ -536,7 +743,7 @@ function renderRankingChart() {
           callbacks: {
             title: function(context) {
               const index = context[0].dataIndex;
-              return topItems[index].email || '';
+              return topItems[index].username || topItems[index].email || '';
             },
             label: function(context) {
               return `Average: ${context.raw}%`;
@@ -554,28 +761,9 @@ function renderRankingChart() {
   });
 }
 
-function renderRecentResults(items) {
-  const box = $('recentResultsContainer');
-
-  if (!items.length) {
-    box.innerHTML = `<div class="table-card">No exam history yet.</div>`;
-    return;
-  }
-
-  box.innerHTML = items.map(item => `
-    <div class="result-row">
-      <div>
-        <strong>${escapeHtml(item.subject)}</strong><br>
-        <small class="text-muted-school">${formatDate(item.dateTaken)}</small>
-      </div>
-      <div class="text-end">
-        <strong>${item.score}/${item.totalItems}</strong><br>
-        <small>${item.percentage}%</small>
-      </div>
-    </div>
-  `).join('');
-}
-
+/* =========================
+   ADMIN EXAM BUILDER
+========================= */
 function handleAdminNext() {
   if (state.adminStep === 1) {
     const subject = $('subjectSelect').value;
@@ -729,9 +917,14 @@ async function handleSaveQuestions() {
   }
 }
 
+/* =========================
+   EXAM TAKING FLOW
+========================= */
 async function handleStudentSubjectChange(e) {
   const subject = e.target.value;
   state.selectedExamSubject = subject;
+  renderExamSubjectPicker();
+  
   state.selectedExamMode = null;
   state.fullSubjectQuestions = [];
   $('selectedExamSetupText').textContent = 'No setup selected yet.';
@@ -1124,7 +1317,6 @@ async function handleSubmitExam() {
 /* =========================
    ANNOUNCEMENTS
 ========================= */
-
 async function loadAnnouncements() {
   try {
     const res = await fetch(`${API_URL}?action=getAnnouncements`);
@@ -1159,7 +1351,7 @@ function renderAnnouncements() {
           <div class="announcement-avatar">${escapeHtml(item.profileLabel || 'S')}</div>
           <div class="announcement-meta">
             <div class="announcement-author-row">
-            <span class="announcement-email">${escapeHtml(item.username || item.email || '')}</span>
+              <span class="announcement-email">${escapeHtml(item.username || item.email || '')}</span>
             </div>
             <div class="announcement-submeta">
               <span>${escapeHtml(item.role || 'User')}</span>
@@ -1259,16 +1451,9 @@ async function handleReactAnnouncement(announcementId, reaction) {
   }
 }
 
-function formatDate(value) {
-  const date = new Date(value);
-  if (isNaN(date.getTime())) return '-';
-
-  return date.toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  });
-}
+/* =========================
+   AUTO REFRESH
+========================= */
 function startAutoRefresh() {
   stopAutoRefresh();
 
@@ -1295,6 +1480,20 @@ function stopAutoRefresh() {
     clearInterval(state.rankingRefreshTimer);
     state.rankingRefreshTimer = null;
   }
+}
+
+/* =========================
+   DATE / TEXT HELPERS
+========================= */
+function formatDate(value) {
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return '-';
+
+  return date.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
 }
 
 function formatRelativeTime(value) {
@@ -1327,6 +1526,9 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+/* =========================
+   UI HELPERS
+========================= */
 function setLoading(isLoading) {
   $('loadingOverlay').classList.toggle('d-none', !isLoading);
 }
@@ -1336,7 +1538,7 @@ function showGlobalAlert(message, type = 'info') {
   if (!wrap) return;
 
   const iconMap = {
-    success: 'bi bi-patch-check-fill',
+    success: 'bi-patch-check-fill',
     danger: 'bi-x-circle-fill',
     warning: 'bi-exclamation-triangle-fill',
     info: 'bi-info-circle-fill'
@@ -1370,13 +1572,12 @@ function showGlobalAlert(message, type = 'info') {
 
   wrap.appendChild(item);
 
-  // ⏱ Auto remove after 6 seconds
   setTimeout(() => {
     item.classList.add('fade-out');
 
     setTimeout(() => {
       item.remove();
-    }, 400); // match CSS animation
+    }, 400);
   }, 6000);
 }
 
@@ -1387,14 +1588,14 @@ function clearGlobalAlerts() {
   }
 }
 
-function showLoginAlert(message, type='info') {
+function showLoginAlert(message, type = 'info') {
   showGlobalAlert(message, type);
 }
 
-function showAdminAlert(message, type='info') {
+function showAdminAlert(message, type = 'info') {
   showGlobalAlert(message, type);
 }
 
-function showUserExamAlert(message, type='info') {
+function showUserExamAlert(message, type = 'info') {
   showGlobalAlert(message, type);
 }
