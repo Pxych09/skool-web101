@@ -1931,3 +1931,46 @@ body {
     display: flex;
   }
 }
+
+.subject-chip {
+  position: relative;
+}
+
+.subject-chip-meta {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.3;
+  opacity: 0.9;
+}
+
+.subject-chip.locked {
+  opacity: 0.45;
+  filter: grayscale(0.18);
+  cursor: not-allowed;
+  border-style: dashed;
+}
+
+.subject-chip.locked:hover {
+  background: #fff;
+  border-color: var(--border);
+  transform: none;
+}
+
+.subject-chip.locked .subject-chip-meta {
+  color: #b4234a;
+}
+
+*.available-sub {
+  color: #039322;
+  font-weight: 600;
+}
+.subject-chip.available {
+  border-color: #03b028;
+  background: #f3fff7;
+}
+
+.subject-chip.available .subject-chip-title {
+  color: #03b028;
+}
