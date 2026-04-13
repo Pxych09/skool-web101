@@ -9,6 +9,7 @@ const $ = (id) => document.getElementById(id);
 const API_URL = window.APP_CONFIG.API_URL;
 const SESSION_KEY = 'schoolAppSession';
 const SESSION_TIMEOUT = 60 * 60 * 1000; // 1 hour
+const EXAM_DRAFT_KEY = 'schoolAppExamDraft';
 
 /* =========================
    APP STATE
@@ -38,6 +39,8 @@ const state = {
   sessionWatcherStarted: false,
   sessionCheckInterval: null,
   official50AttemptsBySubject: {},
+  resumeDraft: null,
+  resumeModalInstance: null,
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -84,6 +87,8 @@ function bindEvents() {
   });
 
   $('btnSaveUsername').addEventListener('click', handleSaveUsername);
+  $('btnResumeExam').addEventListener('click', handleResumeExam);
+  $('btnStartNewExam').addEventListener('click', handleStartNewExam);
 
   const examCarouselEl = $('examCarousel');
   if (examCarouselEl) {
@@ -191,6 +196,7 @@ async function handleSaveUsername() {
 
 function handleLogout() {
   clearSession();
+  clearExamDraft();
 
   state.currentUser = null;
   state.subjects = [];
@@ -331,7 +337,80 @@ function handleAutoLogout() {
     location.reload();
   }, 1000);
 }
+/* =========================
+   EXAM DRAFT HELPERS
+========================= */
+function getExamDraft() {
+  const raw = localStorage.getItem(EXAM_DRAFT_KEY);
+  if (!raw) return null;
 
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function saveExamDraft() {
+  if (!state.currentUser || !state.selectedExamSubject || !state.selectedExamMode || !state.loadedExamQuestions.length) {
+    return;
+  }
+
+  const answers = collectExamAnswers();
+  const draft = {
+    email: state.currentUser.email,
+    subject: state.selectedExamSubject,
+    examMode: state.selectedExamMode,
+    loadedExamQuestions: state.loadedExamQuestions,
+    currentExamIndex: state.currentExamIndex || 0,
+    answers,
+    savedAt: Date.now()
+  };
+
+  localStorage.setItem(EXAM_DRAFT_KEY, JSON.stringify(draft));
+}
+
+function clearExamDraft() {
+  localStorage.removeItem(EXAM_DRAFT_KEY);
+}
+
+function findMatchingExamDraft() {
+  const draft = getExamDraft();
+  if (!draft || !state.currentUser || !state.selectedExamMode) return null;
+
+  const sameUser = String(draft.email || '').trim().toLowerCase() === String(state.currentUser.email || '').trim().toLowerCase();
+  const sameSubject = String(draft.subject || '').trim() === String(state.selectedExamSubject || '').trim();
+  const sameCount = Number(draft.examMode?.count || 0) === Number(state.selectedExamMode?.count || 0);
+  const sameMode = String(draft.examMode?.mode || '') === String(state.selectedExamMode?.mode || '');
+
+  if (!sameUser || !sameSubject || !sameCount || !sameMode) {
+    return null;
+  }
+
+  return draft;
+}
+
+function restoreExamDraftAnswers(draft) {
+  if (!draft || !Array.isArray(draft.answers)) return;
+
+  draft.answers.forEach(answerItem => {
+    if (!answerItem?.id || !answerItem?.answer) return;
+
+    const selector = `input[name="exam_${answerItem.id}"][value="${CSS.escape(answerItem.answer)}"]`;
+    const input = document.querySelector(selector);
+    if (input) {
+      input.checked = true;
+    }
+  });
+}
+
+function attachExamDraftListeners() {
+  document.querySelectorAll('#examCarouselInner input.form-check-input').forEach(input => {
+    input.addEventListener('change', () => {
+      saveExamDraft();
+    });
+  });
+}
 /* =========================
    SUBJECTS / DASHBOARD
 ========================= */
@@ -401,7 +480,7 @@ function renderExamSubjectPicker() {
           ${isLocked
             ? 'Locked • 2 official attempts used'
             : officialAttempts > 0
-              ? `${officialAttempts}/2 official attempts used`
+              ? `${officialAttempts} out of 2 attempts`
               : '<span class="available-sub">Available</span>'}
         </small>
       </button>
@@ -1128,7 +1207,7 @@ async function handleLoadExam() {
     const subject = $('examSubjectSelect').value;
     if (!subject) throw new Error('Please select a subject.');
     if (!state.selectedExamMode) throw new Error('Please choose an exam type first.');
-    
+
     const isOfficial50 = state.selectedExamMode?.isOfficial && Number(state.selectedExamMode?.count || 0) >= 50;
     const usedAttempts = Number(state.official50AttemptsBySubject?.[subject] || 0);
 
@@ -1137,6 +1216,20 @@ async function handleLoadExam() {
     }
 
     setLoading(true);
+
+    const existingDraft = findMatchingExamDraft();
+    if (existingDraft && existingDraft.loadedExamQuestions?.length) {
+      state.resumeDraft = existingDraft;
+
+      $('resumeExamText').textContent =
+        `${subject} • ${state.selectedExamMode.label}\nYou left at question ${existingDraft.currentExamIndex + 1}.`;
+
+      const modalEl = $('resumeExamModal');
+      state.resumeModalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+      state.resumeModalInstance.show();
+
+      return;
+    }
 
     const res = await fetch(`${API_URL}?action=getExamQuestions&subject=${encodeURIComponent(subject)}`);
     const data = await res.json();
@@ -1153,7 +1246,8 @@ async function handleLoadExam() {
       throw new Error('Unable to prepare exam questions.');
     }
 
-    renderExamModalCarousel(state.loadedExamQuestions, subject, state.selectedExamMode);
+    renderExamModalCarousel(state.loadedExamQuestions, subject, state.selectedExamMode, null);
+    saveExamDraft();
 
     const examModalEl = $('examModal');
     if (!examModalEl) {
@@ -1164,7 +1258,10 @@ async function handleLoadExam() {
       throw new Error('Bootstrap modal is not loaded.');
     }
 
-    state.examModalInstance = bootstrap.Modal.getOrCreateInstance(examModalEl);
+    state.examModalInstance = bootstrap.Modal.getOrCreateInstance(examModalEl, {
+      backdrop: 'static',
+      keyboard: false
+    });
     state.examModalInstance.show();
   } catch (error) {
     showUserExamAlert(error.message, 'danger');
@@ -1192,7 +1289,8 @@ function shuffleArray(arr) {
   return arr;
 }
 
-function renderExamModalCarousel(questions, subject, examMode) {
+
+function renderExamModalCarousel(questions, subject, examMode, draft = null) {
   const inner = $('examCarouselInner');
   const examCarouselEl = $('examCarousel');
 
@@ -1242,6 +1340,19 @@ function renderExamModalCarousel(questions, subject, examMode) {
     wrap: false
   });
 
+  attachExamDraftListeners();
+  restoreExamDraftAnswers(draft);
+
+  const restoreIndex = Math.min(
+    Number(draft?.currentExamIndex || 0),
+    Math.max(questions.length - 1, 0)
+  );
+
+  if (restoreIndex > 0) {
+    state.examCarousel.to(restoreIndex);
+    state.currentExamIndex = restoreIndex;
+  }
+
   updateExamCarouselUI();
 }
 
@@ -1260,6 +1371,8 @@ function updateExamCarouselUI() {
   const isLast = state.currentExamIndex >= total - 1;
   $('btnExamNext').classList.toggle('d-none', isLast);
   $('btnSubmitExam').classList.toggle('d-none', !isLast);
+  
+  saveExamDraft();
 }
 
 function goPrevExamSlide() {
@@ -1321,6 +1434,7 @@ async function handleSubmitExam() {
       state.examModalInstance.hide();
     }
 
+    clearExamDraft();
     const isOfficial = Number(data.data.itemCount || data.data.totalItems || 0) >= 20;
     const examTypeText = isOfficial
       ? 'This result was recorded as an official exam and affects the leaderboard.'
@@ -1340,6 +1454,86 @@ async function handleSubmitExam() {
     showUserExamAlert(error.message || 'Failed to fetch', 'danger');
   } finally {
     setLoading(false);
+  }
+}
+
+/* =========================
+   EXAM RESUME HANDLERS
+========================= */
+
+async function handleResumeExam() {
+  try {
+    const draft = state.resumeDraft;
+    if (!draft) return;
+
+    if (state.resumeModalInstance) {
+      state.resumeModalInstance.hide();
+    }
+
+    state.fullSubjectQuestions = [...draft.loadedExamQuestions];
+    state.loadedExamQuestions = [...draft.loadedExamQuestions];
+
+    renderExamModalCarousel(
+      state.loadedExamQuestions,
+      draft.subject,
+      draft.examMode,
+      draft
+    );
+
+    const examModalEl = $('examModal');
+    state.examModalInstance = bootstrap.Modal.getOrCreateInstance(examModalEl, {
+      backdrop: 'static',
+      keyboard: false
+    });
+
+    state.examModalInstance.show();
+
+    showGlobalAlert('Resumed your unfinished exam.', 'info');
+  } catch (error) {
+    showGlobalAlert('Failed to resume exam.', 'danger');
+  }
+}
+
+async function handleStartNewExam() {
+  try {
+    if (state.resumeModalInstance) {
+      state.resumeModalInstance.hide();
+    }
+
+    clearExamDraft();
+
+    const subject = $('examSubjectSelect').value;
+
+    const res = await fetch(`${API_URL}?action=getExamQuestions&subject=${encodeURIComponent(subject)}`);
+    const data = await res.json();
+
+    if (!data.success) throw new Error(data.message);
+
+    const allQuestions = data.data || [];
+
+    state.fullSubjectQuestions = allQuestions;
+    state.loadedExamQuestions = buildExamQuestionSet(allQuestions, state.selectedExamMode);
+
+    renderExamModalCarousel(
+      state.loadedExamQuestions,
+      subject,
+      state.selectedExamMode,
+      null
+    );
+
+    saveExamDraft();
+
+    const examModalEl = $('examModal');
+    state.examModalInstance = bootstrap.Modal.getOrCreateInstance(examModalEl, {
+      backdrop: 'static',
+      keyboard: false
+    });
+
+    state.examModalInstance.show();
+
+    showGlobalAlert('Started a new exam.', 'info');
+  } catch (error) {
+    showGlobalAlert(error.message, 'danger');
   }
 }
 
