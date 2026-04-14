@@ -1,1313 +1,1824 @@
 window.APP_CONFIG = {
-  API_URL: "https://script.google.com/macros/s/AKfycbzPER-flrF1jIbkicpGHELNLmWbqob2q6_ACSHV3eRMR_fgBlml2TsKne8xPcQTxnPPbg/exec"
+  API_URL: "https://script.google.com/macros/s/AKfycbwO4odNrbx0XKB8lOPwckkWtbD42LRPvvbSL2izBbr9d5WD2_e0uq32H3ls7rrDURge/exec"
 };
 
+/* =========================
+   APP CONSTANTS
+========================= */
 const $ = (id) => document.getElementById(id);
 const API_URL = window.APP_CONFIG.API_URL;
-const STORAGE_KEY = "movieFeedUser";
+const SESSION_KEY = 'schoolAppSession';
+const SESSION_TIMEOUT = 60 * 60 * 1000; // 1 hour
+const EXAM_DRAFT_KEY = 'schoolAppExamDraft';
 
+/* =========================
+   APP STATE
+========================= */
 const state = {
   currentUser: null,
-  feed: [],
-  todos: [],
-  todoDrafts: [],
-  selectedTodoId: "",
-  dashboard: {
-    genres: [],
-    topRated: [],
-    watchedByMonth: [],
-    userTotals: []
-  },
-  dashboardHidden: false,
-  isEditing: false,
-  alertTimers: new Map(),
-  loadingCount: 0,
-  notifications: [],
-  notifOpen: false,
-  subGenres: [],
+  subjects: [],
+  adminStep: 1,
+  selectedAdminSubject: '',
+  adminItemCount: 0,
+  loadedExamQuestions: [],
+  fullSubjectQuestions: [],
+  selectedExamSubject: '',
+  selectedExamMode: null,
+  examCarousel: null,
+  examModalInstance: null,
+  currentExamIndex: 0,
+  announcements: [],
+  rankings: [],
+  rankingViewType: 'overall',
+  rankingSubject: '',
+  rankingChart: null,
+  announcementRefreshTimer: null,
+  rankingRefreshTimer: null,
+  pendingLoginUser: null,
+  usernameModalInstance: null,
+  sessionWatcherStarted: false,
+  sessionCheckInterval: null,
+  official50AttemptsBySubject: {},
+  resumeDraft: null,
+  resumeModalInstance: null,
 };
 
-document.addEventListener("DOMContentLoaded", bootstrap);
-
-async function bootstrap() {
+document.addEventListener('DOMContentLoaded', () => {
   bindEvents();
-  await restoreSession();
+  restoreSession();
+});
+
+/* =========================
+   EVENT BINDINGS
+========================= */
+function bindEvents() {
+  $('btnLogin').addEventListener('click', handleLogin);
+  $('btnLogout').addEventListener('click', handleLogout);
+
+  $('btnNext').addEventListener('click', handleAdminNext);
+  $('btnPrev').addEventListener('click', handleAdminPrev);
+  $('btnSubmitQuestions').addEventListener('click', handleSaveQuestions);
+  $('btnRebuildQuestions').addEventListener('click', buildQuestionForms);
+
+  $('subjectSelect').addEventListener('change', (e) => {
+    state.selectedAdminSubject = e.target.value;
+    $('selectedSubjectLabel').textContent = state.selectedAdminSubject
+      ? `Selected Subject: ${state.selectedAdminSubject}`
+      : '';
+  });
+
+  $('itemCount').addEventListener('input', (e) => {
+    state.adminItemCount = parseInt(e.target.value, 10) || 0;
+  });
+
+  $('examSubjectSelect').addEventListener('change', handleStudentSubjectChange);
+  $('btnLoadExam').addEventListener('click', handleLoadExam);
+  $('btnSubmitExam').addEventListener('click', handleSubmitExam);
+  $('btnExamPrev').addEventListener('click', goPrevExamSlide);
+  $('btnExamNext').addEventListener('click', goNextExamSlide);
+
+  $('btnPostAnnouncement').addEventListener('click', handlePostAnnouncement);
+  $('btnRefreshAnnouncements').addEventListener('click', loadAnnouncements);
+
+  $('rankingViewType').addEventListener('change', handleRankingViewChange);
+  $('btnLoadRankings').addEventListener('click', loadRankings);
+  $('rankingSubjectSelect').addEventListener('change', (e) => {
+    state.rankingSubject = e.target.value;
+  });
+
+  $('btnSaveUsername').addEventListener('click', handleSaveUsername);
+  $('btnResumeExam').addEventListener('click', handleResumeExam);
+  $('btnStartNewExam').addEventListener('click', handleStartNewExam);
+
+  const examCarouselEl = $('examCarousel');
+  if (examCarouselEl) {
+    examCarouselEl.addEventListener('slid.bs.carousel', updateExamCarouselUI);
+  }
 }
 
-function bindEvents() {
-  const bind = (id, eventName, handler) => {
-    const el = $(id);
-    if (!el) {
-      console.warn(`Missing element: #${id}`);
+/* =========================
+   AUTH / LOGIN
+========================= */
+async function handleLogin() {
+  try {
+    const email = $('loginEmail').value.trim().toLowerCase();
+    if (!email) throw new Error('Please enter your email.');
+
+    setLoading(true);
+
+    const res = await fetch(`${API_URL}?action=login&email=${encodeURIComponent(email)}`);
+    const data = await res.json();
+
+    if (!data.success) throw new Error(data.message || 'Login failed.');
+
+    state.pendingLoginUser = data.data;
+
+    if (data.data.needsUsernameSetup) {
+      $('usernameInput').value = '';
+      const modalEl = $('usernameSetupModal');
+      state.usernameModalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+      state.usernameModalInstance.show();
       return;
     }
-    el.addEventListener(eventName, handler);
-  };
 
-  bind("loginForm", "submit", handleLogin);
-  bind("logoutBtn", "click", handleLogout);
-  bind("postForm", "submit", handleSavePost);
-  bind("cancelEditBtn", "click", resetPostForm);
-  bind("feedSearch", "input", handleFeedSearch);
-  bind("notifBtn", "click", toggleNotifications);
-  bind("toggleDashboardBtn", "click", toggleDashboard);
-  bind("addTodoBtn", "click", handleAddTodoDraft);
-  bind("saveTodoBtn", "click", handleSaveTodoDrafts);
-  bind("todoInput", "keydown", handleTodoInputKeydown);
-  bind("addSubGenreBtn", "click", handleAddSubGenre);
-  bind("subGenreInput", "keydown", handleSubGenreInputKeydown);
-
-  document.addEventListener("click", (event) => {
-    const wrap = document.querySelector(".notif-wrap");
-    if (!wrap) return;
-
-    if (!wrap.contains(event.target)) {
-      closeNotifications();
-    }
-  });
-}
-
-async function api(method, ...args) {
-  if (!API_URL || API_URL.includes("PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE")) {
-    throw new Error("Set your Apps Script Web App URL in app.js first.");
-  }
-
-  const body = new URLSearchParams({
-    method,
-    args: JSON.stringify(args)
-  });
-
-  const response = await fetch(API_URL, {
-    method: "POST",
-    body
-  });
-
-  const text = await response.text();
-
-  if (!response.ok) {
-    throw new Error(`Request failed: ${response.status}`);
-  }
-
-  let result;
-  try {
-    result = JSON.parse(text);
+    await completeLogin(data.data);
   } catch (error) {
-    console.error("Non-JSON response:", text);
-    throw new Error("Backend did not return valid JSON.");
+    showLoginAlert(error.message, 'danger');
+  } finally {
+    setLoading(false);
   }
-
-  if (!result.ok) {
-    throw new Error(result.error || "Something went wrong.");
-  }
-
-  return result.data;
 }
 
-function withLoading(fn) {
-  return async (...args) => {
-    try {
-      showLoading(true);
-      return await fn(...args);
-    } finally {
-      showLoading(false);
+async function completeLogin(userData) {
+  saveSession(userData);
+  state.currentUser = userData;
+  state.pendingLoginUser = null;
+
+  $('loginSection').classList.add('d-none');
+  $('appSection').classList.remove('d-none');
+
+  const displayName = userData.username || userData.email;
+  $('userInfoText').textContent = `${displayName} | ${state.currentUser.role}`;
+
+  if (state.currentUser.role === 'Admin') {
+    $('adminSection').classList.remove('d-none');
+  } else {
+    $('adminSection').classList.add('d-none');
+  }
+
+  $('rankingSection').classList.remove('d-none');
+
+  await loadSubjects();
+  renderRankingSubjects();
+  await loadDashboard();
+  await loadRankings();
+  startAutoRefresh();
+  await loadAnnouncements();
+  startSessionWatcher();
+
+  showLoginAlert(`Welcome, ${escapeHtml(displayName)}!`, 'success');
+}
+
+async function handleSaveUsername() {
+  try {
+    const username = $('usernameInput').value.trim();
+    if (!username) throw new Error('Please enter a username.');
+
+    if (!state.pendingLoginUser?.email) {
+      throw new Error('No pending user found.');
     }
-  };
-}
 
-function showLoading(show) {
-  const overlay = $("loadingOverlay");
-  if (!overlay) return;
+    setLoading(true);
 
-  state.loadingCount += show ? 1 : -1;
-  state.loadingCount = Math.max(0, state.loadingCount);
-  overlay.classList.toggle("d-none", state.loadingCount === 0);
-}
+    const url = `${API_URL}?action=setUsername&email=${encodeURIComponent(state.pendingLoginUser.email)}&username=${encodeURIComponent(username)}`;
+    const res = await fetch(url);
+    const data = await res.json();
 
-function showSection(isLoggedIn) {
-  $("loginSection")?.classList.toggle("d-none", isLoggedIn);
-  $("appSection")?.classList.toggle("d-none", !isLoggedIn);
-}
+    if (!data.success) throw new Error(data.message || 'Failed to save username.');
 
-function showAlert(message, type = "danger", duration = 5000) {
-  const wrap = $("globalAlertWrap");
-  if (!wrap) return;
+    const completedUser = {
+      ...state.pendingLoginUser,
+      username: data.data.username,
+      needsUsernameSetup: false
+    };
 
-  const alertId = `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const alertEl = document.createElement("div");
-  alertEl.className = `alert alert-${type} alert-dismissible fade show`;
-  alertEl.id = alertId;
-  alertEl.role = "alert";
+    if (state.usernameModalInstance) {
+      state.usernameModalInstance.hide();
+    }
 
-  alertEl.innerHTML = `
-    <div class="d-flex align-items-start justify-content-between gap-3">
-      <div>${escapeHtml(message)}</div>
-      <button type="button" class="btn-close ${type === "success" ? "" : "btn-close-white"}" aria-label="Close"></button>
-    </div>
-  `;
-
-  alertEl.querySelector(".btn-close")?.addEventListener("click", () => removeAlert(alertId));
-  wrap.appendChild(alertEl);
-
-  const timer = setTimeout(() => removeAlert(alertId), duration);
-  state.alertTimers.set(alertId, timer);
-}
-
-function removeAlert(alertId) {
-  const el = document.getElementById(alertId);
-  if (!el) return;
-
-  const timer = state.alertTimers.get(alertId);
-  if (timer) {
-    clearTimeout(timer);
-    state.alertTimers.delete(alertId);
+    await completeLogin(completedUser);
+  } catch (error) {
+    showGlobalAlert(error.message, 'danger');
+  } finally {
+    setLoading(false);
   }
-
-  el.classList.remove("show");
-  setTimeout(() => el.remove(), 200);
 }
 
-function hideAlerts() {
-  const wrap = $("globalAlertWrap");
-  if (wrap) wrap.innerHTML = "";
-  state.alertTimers.forEach((timer) => clearTimeout(timer));
-  state.alertTimers.clear();
+function handleLogout() {
+  clearSession();
+  clearExamDraft();
+
+  state.currentUser = null;
+  state.subjects = [];
+  state.loadedExamQuestions = [];
+  state.fullSubjectQuestions = [];
+  state.selectedExamSubject = '';
+  state.selectedExamMode = null;
+  state.adminStep = 1;
+  state.selectedAdminSubject = '';
+  state.adminItemCount = 0;
+  state.currentExamIndex = 0;
+  state.examCarousel = null;
+  state.examModalInstance = null;
+  state.announcements = [];
+  state.rankings = [];
+  state.rankingViewType = 'overall';
+  state.rankingSubject = '';
+  state.pendingLoginUser = null;
+
+  $('loginSection').classList.remove('d-none');
+  $('appSection').classList.add('d-none');
+  $('loginEmail').value = '';
+  $('questionsContainer').innerHTML = '';
+  $('itemCount').value = '';
+  $('subjectSelect').innerHTML = `<option value="">Select Subject</option>`;
+  $('examSubjectSelect').innerHTML = `<option value="">Select Subject</option>`;
+  $('examModeOptions').innerHTML = `<div class="empty-mode-note">Select a subject first.</div>`;
+  $('selectedExamSetupText').textContent = 'No setup selected yet.';
+  $('selectedSubjectLabel').textContent = '';
+  $('examCarouselInner').innerHTML = '';
+  $('examModalMeta').textContent = '';
+  $('examProgressText').textContent = '';
+  $('btnSubmitExam').classList.add('d-none');
+  $('announcementMessage').value = '';
+  $('announcementList').innerHTML = `<div class="empty-mode-note">No announcements yet.</div>`;
+  $('rankingViewType').value = 'overall';
+  $('rankingSubjectSelect').innerHTML = `<option value="">Select Subject</option>`;
+  $('rankingSubjectWrap').classList.add('d-none');
+  $('rankingTableContainer').innerHTML = `<div class="empty-mode-note">Load rankings to see student standings.</div>`;
+  $('yourRankCard').classList.add('d-none');
+  $('yourRankCard').innerHTML = '';
+  $('rankingStatusText').textContent = 'Waiting for ranking data...';
+
+  clearGlobalAlerts();
+  updateAdminWizard();
+  stopAutoRefresh();
+  destroyRankingChart();
+  stopSessionWatcher();
 }
 
+/* =========================
+   SESSION HELPERS
+========================= */
 function saveSession(user) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+  const session = {
+    user,
+    lastActivity: Date.now()
+  };
+  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+}
+
+function getSession() {
+  const raw = localStorage.getItem(SESSION_KEY);
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
 }
 
 function clearSession() {
-  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(SESSION_KEY);
 }
 
-function getSessionToken() {
-  return state.currentUser?.sessionToken || "";
+function updateSessionActivity() {
+  const session = getSession();
+  if (!session) return;
+
+  session.lastActivity = Date.now();
+
+  if (state.currentUser) {
+    session.user = state.currentUser;
+  }
+
+  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
 }
 
-async function handleLogin(event) {
-  event.preventDefault();
-  hideAlerts();
+function restoreSession() {
+  const session = getSession();
+  if (!session || !session.user) return;
 
-  const username = $("loginUsername")?.value.trim() || "";
-  const password = $("loginPassword")?.value.trim() || "";
-  const submitBtn = event.submitter;
+  const now = Date.now();
 
-  try {
-    toggleButton(submitBtn, true);
-    const user = await withLoading(() => api("login", username, password))();
-    state.currentUser = user;
-    saveSession(user);
-    setProfile(user);
-    showSection(true);
-    await refreshFeed();
-    showAlert(`Welcome back, ${user.name || user.username}!`, "success");
-  } catch (error) {
-    showAlert(error.message, "danger");
-  } finally {
-    toggleButton(submitBtn, false);
-  }
-}
-
-async function handleLogout() {
-  try {
-    if (getSessionToken()) {
-      await withLoading(() => api("logout", getSessionToken()))();
-    }
-  } catch (error) {
-    console.warn("Logout request failed:", error);
-  }
-
-  state.currentUser = null;
-  state.feed = [];
-  state.dashboard = {
-    topRated: [],
-    watchedByMonth: [],
-    userTotals: []
-  };
-  state.dashboardHidden = false;
-  state.isEditing = false;
-  state.notifications = [];
-  state.notifOpen = false;
-  state.todos = [];
-  state.todoDrafts = [];
-  state.selectedTodoId = "";
-  state.subGenres = [];
-
-  clearSession();
-  $("loginForm")?.reset();
-  resetPostForm();
-  setProfile(null);
-
-  if ($("feedList")) $("feedList").innerHTML = "";
-  if ($("feedCountBadge")) $("feedCountBadge").textContent = "0 posts";
-  $("emptyFeed")?.classList.add("d-none");
-
-  if ($("subGenrePreviewList")) {
-    $("subGenrePreviewList").innerHTML = `<div class="text-secondary-light small">No sub-genres yet.</div>`;
-  }
-  if ($("subGenreCount")) {
-    $("subGenreCount").textContent = "0 items";
-  }
-  if ($("subGenreInput")) {
-    $("subGenreInput").value = "";
-  }
-
-    if ($("topRatedList")) $("topRatedList").innerHTML = "";
-    if ($("watchedStatsList")) $("watchedStatsList").innerHTML = "";
-    if ($("userTotalsList")) $("userTotalsList").innerHTML = "";
-    if ($("dashboardContent")) $("dashboardContent").classList.remove("d-none");
-    if ($("toggleDashboardBtn")) $("toggleDashboardBtn").textContent = "Hide Dashboard";
-    if ($("genreStatsList")) $("genreStatsList").innerHTML = "";
-    if ($("savedTodoList")) $("savedTodoList").innerHTML = `<div class="text-secondary-light small">No saved watchlists yet.</div>`;
-    if ($("draftTodoList")) $("draftTodoList").innerHTML = `<div class="text-secondary-light small">|&nbsp;No draft items yet.</div>`;
-    if ($("savedTodoCount")) $("savedTodoCount").textContent = "0 items";
-    if ($("draftTodoCount")) $("draftTodoCount").textContent = "0 draft";
-    if ($("todoInput")) $("todoInput").value = "";
-
-  $("notifDropdown")?.classList.add("d-none");
-  if ($("notifList")) {
-    $("notifList").innerHTML = `<div class="p-3 text-secondary-light small">No notifications yet.</div>`;
-  }
-  $("notifBadge")?.classList.add("d-none");
-
-  hideAlerts();
-  showSection(false);
-}
-
-async function restoreSession() {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (!saved) {
-    showSection(false);
-    return;
-  }
-
-  try {
-    state.currentUser = JSON.parse(saved);
-    setProfile(state.currentUser);
-    showSection(true);
-    await refreshFeed();
-  } catch (error) {
-    console.warn("Failed to restore session:", error);
+  if (now - session.lastActivity > SESSION_TIMEOUT) {
     clearSession();
-    state.currentUser = null;
-    showSection(false);
-  }
-}
-
-function setProfile(user) {
-  const displayName = $("displayName");
-  const profileAvatar = $("profileAvatar");
-  const fallbackAvatar = $("fallbackAvatar");
-
-  if (displayName) {
-    displayName.textContent = user?.name || user?.username || "User";
-  }
-
-  if (!profileAvatar || !fallbackAvatar) return;
-
-  if (user?.avatar) {
-    profileAvatar.src = user.avatar;
-    profileAvatar.classList.remove("d-none");
-    fallbackAvatar.classList.add("d-none");
-  } else {
-    profileAvatar.removeAttribute("src");
-    profileAvatar.classList.add("d-none");
-    fallbackAvatar.classList.remove("d-none");
-  }
-}
-
-async function refreshFeed() {
-  if (!state.currentUser) return;
-
-  try {
-    const [feed, notifications, dashboard, todos, subGenres] = await Promise.all([
-      withLoading(() => api("getFeed", getSessionToken()))(),
-      withLoading(() => api("getNotifications", getSessionToken()))(),
-      withLoading(() => api("getDashboardData", getSessionToken()))(),
-      withLoading(() => api("getTodos", getSessionToken()))(),
-      withLoading(() => api("getSubGenres", getSessionToken()))()
-    ]);
-
-    state.feed = Array.isArray(feed) ? feed : [];
-    state.notifications = Array.isArray(notifications) ? notifications : [];
-    state.todos = Array.isArray(todos) ? todos : [];
-    state.subGenres = Array.isArray(subGenres) ? subGenres : [];
-    state.dashboard = dashboard || {
-      genres: [],
-      topRated: [],
-      watchedByMonth: [],
-      userTotals: []
-    };
-
-    renderSavedTodos();
-    renderDraftTodos();
-    renderSubGenrePreview();
-    renderSubGenreCheckboxes();
-    renderDashboard();
-    applyFeedFilter();
-    renderNotifications();
-  } catch (error) {
-    showAlert(error.message, "danger");
-    if (/Session expired/i.test(error.message)) {
-      await handleLogout();
-    }
-  }
-}
-
-
-function handleFeedSearch() {
-  applyFeedFilter();
-}
-
-function applyFeedFilter() {
-  const query = ($("feedSearch")?.value || "").trim().toLowerCase();
-
-  if (!query) {
-    renderFeed(state.feed);
     return;
   }
 
-  const filteredFeed = state.feed.filter((post) => {
-  const haystack = [
-    post.movieName,
-    post.genre,
-    ...(post.subGenres || []),
-    post.caption,
-    post.username,
-    post.name,
-    post.duration,
-    ...(post.comments || []).map(
-      (comment) => `${comment.name} ${comment.username} ${comment.comment}`
-    )
-  ]
-    .join(" ")
-    .toLowerCase();
+  completeLogin(session.user);
+}
 
-    return haystack.includes(query);
+function startSessionWatcher() {
+  if (state.sessionWatcherStarted) return;
+  state.sessionWatcherStarted = true;
+
+  const events = ['click', 'keydown', 'mousemove', 'scroll', 'touchstart'];
+
+  events.forEach(event => {
+    document.addEventListener(event, updateSessionActivity, { passive: true });
   });
 
-  renderFeed(filteredFeed);
+  state.sessionCheckInterval = setInterval(() => {
+    const session = getSession();
+    if (!session) return;
+
+    const now = Date.now();
+    if (now - session.lastActivity > SESSION_TIMEOUT) {
+      handleAutoLogout();
+    }
+  }, 30000);
 }
 
-function handleTodoInputKeydown(event) {
-  if (event.key === "Enter") {
-    event.preventDefault();
-    handleAddTodoDraft();
+function stopSessionWatcher() {
+  if (state.sessionCheckInterval) {
+    clearInterval(state.sessionCheckInterval);
+    state.sessionCheckInterval = null;
   }
+  state.sessionWatcherStarted = false;
 }
 
-function handleAddTodoDraft() {
-  const input = $("todoInput");
-  const value = input?.value.trim() || "";
+function handleAutoLogout() {
+  clearSession();
+  showGlobalAlert('Session expired. Please log in again.', 'warning');
 
-  if (!value) return;
-
-  state.todoDrafts.push(value);
-  input.value = "";
-  renderDraftTodos();
+  setTimeout(() => {
+    location.reload();
+  }, 1000);
 }
-
-async function handleSaveTodoDrafts() {
-  if (!state.todoDrafts.length) {
-    showAlert("Add at least one to-do item first.", "danger");
-    return;
-  }
+/* =========================
+   EXAM DRAFT HELPERS
+========================= */
+function getExamDraft() {
+  const raw = localStorage.getItem(EXAM_DRAFT_KEY);
+  if (!raw) return null;
 
   try {
-    await withLoading(() => api("saveTodos", getSessionToken(), state.todoDrafts))();
-    state.todoDrafts = [];
-    renderDraftTodos();
-    await refreshFeed();
-    showAlert("To-do watchlists saved successfully.", "success");
-  } catch (error) {
-    showAlert(error.message, "danger");
+    return JSON.parse(raw);
+  } catch {
+    return null;
   }
 }
 
-function renderDraftTodos() {
-  const list = $("draftTodoList");
-  const count = $("draftTodoCount");
-
-  if (!list || !count) return;
-
-  count.textContent = `${state.todoDrafts.length} draft${state.todoDrafts.length !== 1 ? "s" : ""}`;
-
-  if (!state.todoDrafts.length) {
-    list.innerHTML = `<div class="text-secondary small">|&nbsp;No draft items yet.</div>`;
+function saveExamDraft() {
+  if (!state.currentUser || !state.selectedExamSubject || !state.selectedExamMode || !state.loadedExamQuestions.length) {
     return;
   }
 
-  list.innerHTML = "";
+  const answers = collectExamAnswers();
+  const draft = {
+    email: state.currentUser.email,
+    subject: state.selectedExamSubject,
+    examMode: state.selectedExamMode,
+    loadedExamQuestions: state.loadedExamQuestions,
+    currentExamIndex: state.currentExamIndex || 0,
+    answers,
+    savedAt: Date.now()
+  };
 
-  state.todoDrafts.forEach((movieName, index) => {
-    const item = document.createElement("div");
-    item.className = "todo-item";
+  localStorage.setItem(EXAM_DRAFT_KEY, JSON.stringify(draft));
+}
 
-    item.innerHTML = `
-      <div class="todo-item-left">
-        <div>
-          <div class="todo-item-title">${escapeHtml(movieName)}</div>
-          <div class="todo-item-meta">Draft item</div>
-        </div>
-      </div>
-      <button type="button" class="todo-remove-btn align-self-center" data-draft-index="${index}">
-        <i class="bi bi-x-circle"></i>
+function clearExamDraft() {
+  localStorage.removeItem(EXAM_DRAFT_KEY);
+}
+
+function findMatchingExamDraft() {
+  const draft = getExamDraft();
+  if (!draft || !state.currentUser || !state.selectedExamMode) return null;
+
+  const sameUser = String(draft.email || '').trim().toLowerCase() === String(state.currentUser.email || '').trim().toLowerCase();
+  const sameSubject = String(draft.subject || '').trim() === String(state.selectedExamSubject || '').trim();
+  const sameCount = Number(draft.examMode?.count || 0) === Number(state.selectedExamMode?.count || 0);
+  const sameMode = String(draft.examMode?.mode || '') === String(state.selectedExamMode?.mode || '');
+
+  if (!sameUser || !sameSubject || !sameCount || !sameMode) {
+    return null;
+  }
+
+  return draft;
+}
+
+function restoreExamDraftAnswers(draft) {
+  if (!draft || !Array.isArray(draft.answers)) return;
+
+  draft.answers.forEach(answerItem => {
+    if (!answerItem?.id || !answerItem?.answer) return;
+
+    const selector = `input[name="exam_${answerItem.id}"][value="${CSS.escape(answerItem.answer)}"]`;
+    const input = document.querySelector(selector);
+    if (input) {
+      input.checked = true;
+    }
+  });
+}
+
+function attachExamDraftListeners() {
+  document.querySelectorAll('#examCarouselInner input.form-check-input').forEach(input => {
+    input.addEventListener('change', () => {
+      saveExamDraft();
+    });
+  });
+}
+/* =========================
+   SUBJECTS / DASHBOARD
+========================= */
+async function loadSubjects() {
+  const res = await fetch(`${API_URL}?action=getSubjects`);
+  const data = await res.json();
+
+  if (!data.success) throw new Error(data.message || 'Failed to load subjects.');
+
+  state.subjects = data.data || [];
+  renderSubjects();
+}
+
+function renderSubjects() {
+  const adminSelect = $('subjectSelect');
+  const examSelect = $('examSubjectSelect');
+  const examPicker = $('examSubjectPicker');
+
+  adminSelect.innerHTML = `<option value="">Select Subject</option>`;
+  examSelect.innerHTML = `<option value="">Select Subject</option>`;
+
+  state.subjects.forEach(item => {
+    const opt1 = document.createElement('option');
+    opt1.value = item.subject;
+    opt1.textContent = item.subject;
+    adminSelect.appendChild(opt1);
+
+    const opt2 = document.createElement('option');
+    opt2.value = item.subject;
+    opt2.textContent = item.subject;
+    examSelect.appendChild(opt2);
+  });
+
+  renderExamSubjectPicker();
+}
+
+function renderExamSubjectPicker() {
+  const picker = $('examSubjectPicker');
+  if (!picker) return;
+
+  if (!state.subjects.length) {
+    picker.innerHTML = `<div class="empty-mode-note">No subjects available yet.</div>`;
+    return;
+  }
+
+  picker.innerHTML = state.subjects.map(item => {
+    const subject = item.subject;
+    const isActive = state.selectedExamSubject === subject;
+    const officialAttempts = Number(state.official50AttemptsBySubject?.[subject] || 0);
+    const isLocked = officialAttempts >= 2;
+    const isAvailable = !isLocked && officialAttempts === 0;
+
+    return `
+      <button
+        type="button"
+        class="subject-chip 
+        ${isActive ? 'active' : 'inactive'} 
+        ${isLocked ? 'locked' : ''} 
+        ${isAvailable ? 'available' : ''}"
+        data-subject="${escapeHtml(subject)}"
+        aria-pressed="${isActive ? 'true' : 'false'}"
+        ${isLocked ? 'disabled' : ''}
+        title="${isLocked ? 'Maximum of 2 official 50-item attempts reached for this subject.' : subject}"
+      >
+        <span class="subject-chip-title">${escapeHtml(subject)}</span>
+        <small class="subject-chip-meta">
+          ${isLocked
+            ? 'Locked • 2 official attempts used'
+            : officialAttempts > 0
+              ? `${officialAttempts} out of 2 attempts`
+              : '<span class="available-sub">Available</span>'}
+        </small>
       </button>
     `;
+  }).join('');
 
-    item.querySelector(".todo-remove-btn")?.addEventListener("click", () => {
-      state.todoDrafts.splice(index, 1);
-      renderDraftTodos();
+  picker.querySelectorAll('.subject-chip').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (btn.disabled) return;
+
+      const subject = btn.dataset.subject || '';
+      if (!subject) return;
+
+      state.selectedExamSubject = subject;
+      $('examSubjectSelect').value = subject;
+
+      renderExamSubjectPicker();
+      await handleStudentSubjectChange({ target: { value: subject } });
     });
-
-    list.appendChild(item);
   });
 }
 
-function renderSavedTodos() {
-  const list = $("savedTodoList");
-  const count = $("savedTodoCount");
+async function loadDashboard() {
+  const email = state.currentUser.email;
+  const res = await fetch(`${API_URL}?action=getUserDashboard&email=${encodeURIComponent(email)}`);
+  const data = await res.json();
 
-  if (!list || !count) return;
+  if (!data.success) throw new Error(data.message || 'Failed to load dashboard.');
 
-  count.textContent = `${state.todos.length} item${state.todos.length !== 1 ? "s" : ""}`;
+  const dash = data.data;
+  state.official50AttemptsBySubject = dash.official50AttemptsBySubject || {};
+  renderExamSubjectPicker();
 
-  if (!state.todos.length) {
-    list.innerHTML = `<div class="text-secondary-light small">No saved watchlists yet.</div>`;
-    return;
-  }
+  $('dashTotalExams').textContent = dash.totalExamsTaken || 0;
+  $('dashSubjectsTaken').textContent = (dash.subjectsTaken || []).length;
 
-  list.innerHTML = "";
-
-  state.todos.forEach((todo) => {
-    const checked = state.selectedTodoId === todo.todoId;
-
-    const item = document.createElement("div");
-    item.className = `todo-item ${checked ? "todo-linked" : ""}`;
-
-    item.innerHTML = `
-      <div class="todo-item-left">
-        <input
-          class="align-self-center form-check-input todo-item-check"
-          type="checkbox"
-          ${checked ? "checked" : ""}
-        >
-        <div class="ms-2">
-          <div class="todo-item-title">${escapeHtml(todo.movieName)}</div>
-          <div class="todo-item-meta">added by: ${escapeHtml(todo.createdBy || "-")}</div>
-        </div>
-      </div>
-    `;
-
-    const checkbox = item.querySelector(".todo-item-check");
-    checkbox?.addEventListener("change", () => {
-      handleSavedTodoToggle(todo, checkbox.checked);
-    });
-
-    list.appendChild(item);
-  });
+  renderAverages(dash.averagesBySubject || []);
+  renderRecentResults(dash.recentResults || []);
 }
 
-function handleSavedTodoToggle(todo, checked) {
-  if (checked) {
-    state.selectedTodoId = todo.todoId;
-    $("movieName").value = todo.movieName || "";
-  } else if (state.selectedTodoId === todo.todoId) {
-    state.selectedTodoId = "";
-    $("movieName").value = "";
-  }
+function renderAverages(items) {
+  const box = $('averagesContainer');
 
-  renderSavedTodos();
-}
-
-
-function renderDashboard() {
-  const genreStatsList = $("genreStatsList");
-  const topRatedList = $("topRatedList");
-  const watchedStatsList = $("watchedStatsList");
-  const userTotalsList = $("userTotalsList");
-
-  if (!genreStatsList || !topRatedList || !watchedStatsList || !userTotalsList) {
-    return;
-  }
-
-  const dashboard = state.dashboard || {};
-  const genres = Array.isArray(dashboard.genres) ? dashboard.genres : [];
-  const topRated = Array.isArray(dashboard.topRated) ? dashboard.topRated : [];
-  const watchedByMonth = Array.isArray(dashboard.watchedByMonth) ? dashboard.watchedByMonth : [];
-  const userTotals = Array.isArray(dashboard.userTotals) ? dashboard.userTotals : [];
-
-  genreStatsList.innerHTML = renderGenreStats(genres);
-  topRatedList.innerHTML = renderTopRatedByStars(topRated);
-  watchedStatsList.innerHTML = renderWatchedStatsByYear(watchedByMonth);
-
-  userTotalsList.innerHTML = userTotals.length
-    ? userTotals.map((item) => `
-        <div class="dashboard-list-item">
-          <div class="dashboard-item-title">${escapeHtml(item.name)}</div>
-          <div class="dashboard-pill">${item.totalPosts} posts</div>
-        </div>
-      `).join("")
-    : `<div class="text-secondary-light small">No user post data yet.</div>`;
-
-  applyDashboardVisibility();
-}
-
-function renderGenreStats(genres) {
-  if (!genres.length) {
-    return `<div class="text-secondary-light small">No genre data yet.</div>`;
-  }
-
-  const max = Math.max(...genres.map((item) => item.total), 1);
-
-  return genres.map((item) => {
-    const width = (item.total / max) * 100;
-
-    return `
-      <div class="genre-stat-item">
-        <div class="genre-stat-top">
-          <div class="genre-stat-name">${escapeHtml(item.genre)}</div>
-          <div class="genre-stat-count">${item.total} post${item.total !== 1 ? "s" : ""}</div>
-        </div>
-        <div class="genre-stat-bar">
-          <div class="genre-stat-bar-fill" style="width: ${width}%;"></div>
-        </div>
-      </div>
-    `;
-  }).join("");
-}
-
-function renderTopRatedByStars(groups) {
-  if (!groups.length) {
-    return `<div class="text-secondary-light small">No rating data yet.</div>`;
-  }
-
-  return groups.map((group) => {
-    const label = `${numberToWord(group.stars)} Stars`;
-    const panelId = `rating-panel-${group.stars}`;
-
-    return `
-      <div class="dashboard-month-item">
-        <button
-          type="button"
-          class="dashboard-month-toggle"
-          data-rating-toggle="${group.stars}"
-          aria-expanded="false"
-          aria-controls="${panelId}"
-        >
-          <div class="dashboard-month-left">
-            <span class="dashboard-month-name">${renderStars(group.stars)} ${escapeHtml(label)}</span>
-            <span class="dashboard-month-count">(${group.total} post${group.total !== 1 ? "s" : ""})</span>
-          </div>
-          <i class="bi bi-chevron-down dashboard-month-icon"></i>
-        </button>
-
-        <div id="${panelId}" class="dashboard-month-panel">
-          ${
-            group.movies.length
-              ? `
-            <div class="dashboard-movie-list">
-              ${group.movies.map((movie) => `
-                <div class="dashboard-movie-entry">
-                  <div class="dashboard-movie-title">${escapeHtml(movie.movieName)}</div>
-                  <div class="dashboard-movie-meta">
-                    ${escapeHtml(movie.name || movie.username)} • ${escapeHtml(movie.genre || "-")} • ${escapeHtml(formatDate(movie.dateWatched))}
-                  </div>
-                </div>
-              `).join("")}
-            </div>
-          `
-              : `<div class="dashboard-empty-month">No movie posts in this rating.</div>`
-          }
-        </div>
-      </div>
-    `;
-  }).join("");
-}
-
-function renderWatchedStatsByYear(items) {
   if (!items.length) {
-    return `<div class="text-secondary-light small">No monthly watched data yet.</div>`;
+    box.innerHTML = `<div class="table-card">No subject averages yet.</div>`;
+    return;
   }
 
-  const grouped = groupWatchedStatsByYear(items);
-
-  return Object.keys(grouped)
-    .sort()
-    .map((year) => {
-      const months = grouped[year];
-
-      return `
-        <div class="dashboard-year-block">
-            <div class="dashboard-year-header">[${escapeHtml(year)}]</div>
-            <div class="dashboard-year-body">
-            ${months.map((monthItem) => {
-            const panelId = `month-panel-${escapeHtml(monthItem.month).replace(/[^a-zA-Z0-9_-]/g, "-")}`;
-
-            return `
-              <div class="dashboard-month-item">
-                <button
-                  type="button"
-                  class="dashboard-month-toggle"
-                  data-month-toggle="${escapeHtml(monthItem.month)}"
-                  aria-expanded="false"
-                  aria-controls="${panelId}"
-                >
-                  <div class="dashboard-month-left">
-                    <span class="dashboard-month-name">${escapeHtml(formatMonthShortLabel(monthItem.month))}</span>
-                    <span class="dashboard-month-count">(${monthItem.total} post${monthItem.total !== 1 ? "s" : ""})</span>
-                  </div>
-                  <i class="bi bi-chevron-down dashboard-month-icon"></i>
-                </button>
-
-                <div id="${panelId}" class="dashboard-month-panel">
-                  <div class="dashboard-movie-list">
-                    ${monthItem.movies.map((movie) => `
-                      <div class="dashboard-movie-entry">
-                        <div class="dashboard-movie-title">${escapeHtml(movie.movieName)}</div>
-                        <div class="dashboard-movie-meta">
-                          ${escapeHtml(movie.name || movie.username)} • ${escapeHtml(movie.genre || "-")} • ⭐ ${movie.rating} • ${escapeHtml(formatDate(movie.dateWatched))}
-                        </div>
-                      </div>
-                    `).join("")}
-                  </div>
-                </div>
-              </div>
-            `;
-            }).join("")}
-            </div>
-        </div>
-        `;
-    })
-    .join("");
+  box.innerHTML = items.map(item => `
+    <div class="table-card">
+      <div class="d-flex justify-content-between">
+        <strong>${escapeHtml(item.subject)}</strong>
+        <span>${item.averagePercentage}%</span>
+      </div>
+      <div class="small text-muted-school">
+        Average Score: ${item.averageScore} | Attempts: ${item.attempts}
+      </div>
+    </div>
+  `).join('');
 }
 
+function renderRecentResults(items) {
+  const box = $('recentResultsContainer');
 
-function groupWatchedStatsByYear(items) {
-  const byYear = {};
+  if (!items.length) {
+    box.innerHTML = `<div class="table-card">No exam history yet.</div>`;
+    return;
+  }
 
-  items.forEach((item) => {
-    const monthKey = String(item.month || "");
-    if (!/^\d{4}-\d{2}$/.test(monthKey)) return;
+  box.innerHTML = items.map(item => `
+    <div class="result-row">
+      <div>
+        <strong>${escapeHtml(item.subject)}</strong>
+        <small class="text-muted-school">${formatDate(item.dateTaken)}</small>
+      </div>
+      <div class="text-end">
+        <strong>${item.score}/${item.totalItems}</strong>
+        <small>${item.percentage}%</small>
+      </div>
+    </div>
+  `).join('');
+}
 
-    const [year] = monthKey.split("-");
-    if (!byYear[year]) {
-      byYear[year] = [];
+/* =========================
+   LEADERBOARD
+========================= */
+function renderRankingSubjects() {
+  const select = $('rankingSubjectSelect');
+  if (!select) return;
+
+  select.innerHTML = `<option value="">Select Subject</option>`;
+
+  state.subjects.forEach(item => {
+    const opt = document.createElement('option');
+    opt.value = item.subject;
+    opt.textContent = item.subject;
+    select.appendChild(opt);
+  });
+}
+
+function handleRankingViewChange(e) {
+  state.rankingViewType = e.target.value;
+  const isSubject = state.rankingViewType === 'subject';
+
+  $('rankingSubjectWrap').classList.toggle('d-none', !isSubject);
+
+  if (!isSubject) {
+    state.rankingSubject = '';
+    $('rankingSubjectSelect').value = '';
+  }
+}
+
+async function loadRankings(isSilent = false) {
+  try {
+    state.rankingViewType = $('rankingViewType').value;
+    state.rankingSubject = $('rankingSubjectSelect').value;
+
+    if (state.rankingViewType === 'subject' && !state.rankingSubject) {
+      throw new Error('Please select a subject for subject ranking.');
     }
 
-    byYear[year].push(item);
-  });
+    if (!isSilent) {
+      setLoading(true);
+    }
 
-  Object.keys(byYear).forEach((year) => {
-    byYear[year].sort((a, b) => a.month.localeCompare(b.month));
-  });
+    $('rankingStatusText').textContent = 'Refreshing leaderboard...';
 
-  return byYear;
-}
+    const url = `${API_URL}?action=getRankings&viewType=${encodeURIComponent(state.rankingViewType)}&subject=${encodeURIComponent(state.rankingSubject)}`;
+    const res = await fetch(url);
+    const data = await res.json();
 
-function handleSubGenreInputKeydown(event) {
-  if (event.key === "Enter") {
-    event.preventDefault();
-    handleAddSubGenre();
+    if (!data.success) throw new Error(data.message || 'Failed to load rankings.');
+
+    if (Array.isArray(data.data)) {
+      state.rankings = data.data;
+    } else {
+      state.rankings = data.data?.items || [];
+    }
+
+    renderYourRankCard();
+    renderRankingChart();
+    renderRankingTable();
+
+    const now = new Date();
+    $('rankingStatusText').textContent = `Last updated: ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  } catch (error) {
+    $('rankingTableContainer').innerHTML = `<div class="empty-mode-note">${error.message}</div>`;
+    $('rankingStatusText').textContent = 'Unable to refresh leaderboard.';
+  } finally {
+    if (!isSilent) {
+      setLoading(false);
+    }
   }
 }
 
-async function handleAddSubGenre() {
-  const input = $("subGenreInput");
-  const value = input?.value.trim() || "";
+function renderRankingTable() {
+  const box = $('rankingTableContainer');
+  const items = state.rankings || [];
+  const myEmail = String(state.currentUser?.email || '').trim().toLowerCase();
 
-  if (!value) return;
+  if (!items.length) {
+    const isSubject = state.rankingViewType === 'subject';
+    const message = isSubject
+      ? `No official leaderboard data yet for subject: ${state.rankingSubject || '(none selected)'}. Only exams with 20+ items count.`
+      : 'No official leaderboard data yet. Only exams with 20+ items count.';
+
+    box.innerHTML = `<div class="empty-mode-note">${message}</div>`;
+    return;
+  }
+
+  box.innerHTML = `
+    <div class="table-responsive ranking-table-wrap">
+      <table class="table ranking-table align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Username</th>
+            <th>Avg %</th>
+            <th>Attempts</th>
+            <th>Last Taken</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${items.map((item, index) => {
+            const rowClass = getRankingRowClass(item, myEmail);
+            const collapseId = `rankDetails_${index}`;
+            return `
+              <tr class="${rowClass} ranking-row-expandable" data-rank-row>
+                <td data-label="Rank">${renderRankBadge(item.rank)}</td>
+                <td class="email-cell" data-label="Username">
+                  <span class="email-text" title="${escapeHtml(item.username || item.email || '')}">
+                    ${escapeHtml(item.username || item.email || '')}
+                  </span>
+                </td>
+                <td class="ranking-strong" data-label="Avg %">${item.averagePercentage}%</td>
+                <td class="ranking-extra-cell" data-label="Attempts">${item.attempts}</td>
+                <td class="last-taken-small ranking-extra-cell" data-label="Last Taken" title="${escapeHtml(new Date(item.lastTaken).toLocaleString())}">
+                  ${escapeHtml(formatDate(item.lastTaken))}
+                </td>
+                <td class="ranking-mobile-details-cell" colspan="5">
+                  <button
+                    class="ranking-mobile-summary"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#${collapseId}"
+                    aria-expanded="false"
+                    aria-controls="${collapseId}"
+                  >
+                    <span class="ranking-mobile-summary-left">
+                      <span class="ranking-mobile-badge">${renderRankBadge(item.rank)}</span>
+                      <span class="ranking-mobile-user">${escapeHtml(item.username || item.email || '')}</span>
+                    </span>
+                    <span class="ranking-mobile-summary-right">
+                      <span class="ranking-mobile-avg">${item.averagePercentage}%</span>
+                      <i class="bi bi-chevron-down ranking-mobile-chevron"></i>
+                    </span>
+                  </button>
+
+                  <div class="collapse ranking-mobile-collapse" id="${collapseId}">
+                    <div class="ranking-mobile-detail-grid">
+                      <div class="ranking-mobile-detail-item">
+                        <span class="ranking-mobile-detail-label">Attempts</span>
+                        <span class="ranking-mobile-detail-value">${item.attempts}</span>
+                      </div>
+                      <div class="ranking-mobile-detail-item">
+                        <span class="ranking-mobile-detail-label">Last Taken</span>
+                        <span class="ranking-mobile-detail-value">${escapeHtml(formatDate(item.lastTaken))}</span>
+                      </div>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderRankBadge(rank) {
+  if (rank === 1) {
+    return `<span class="medal-badge medal-gold" title="1st Place">🥇 1st</span>`;
+  }
+  if (rank === 2) {
+    return `<span class="medal-badge medal-silver" title="2nd Place">🥈 2nd</span>`;
+  }
+  if (rank === 3) {
+    return `<span class="medal-badge medal-bronze" title="3rd Place">🥉 3rd</span>`;
+  }
+  return `<span class="medal-badge medal-default" title="Rank ${rank}">#${rank}</span>`;
+}
+
+function getRankingRowClass(item, myEmail) {
+  const classes = [];
+
+  if (item.rank === 1) classes.push('leader-row', 'leader-gold');
+  if (item.rank === 2) classes.push('leader-row', 'leader-silver');
+  if (item.rank === 3) classes.push('leader-row', 'leader-bronze');
+
+  if (String(item.email || '').trim().toLowerCase() === myEmail) {
+    classes.push('my-rank-row');
+  }
+
+  return classes.join(' ');
+}
+
+function truncateLabel(value, maxLength = 18) {
+  const text = String(value || '');
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 3)}...`;
+}
+
+function renderYourRankCard() {
+  const box = $('yourRankCard');
+  if (!box || !state.currentUser) return;
+
+  const myEmail = String(state.currentUser.email || '').trim().toLowerCase();
+  const me = (state.rankings || []).find(item => String(item.email || '').trim().toLowerCase() === myEmail);
+
+  box.classList.remove('d-none');
+
+  if (!me) {
+    box.innerHTML = `
+      <div class="your-rank-clean">
+        <div class="your-rank-clean-left">
+          <div class="your-rank-clean-label">Your Rank</div>
+          <div class="your-rank-clean-main">Not ranked yet</div>
+          <div class="your-rank-clean-sub">Take an official exam with 20+ items to appear on the leaderboard.</div>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  box.innerHTML = `
+    <div class="your-rank-clean">
+      <div class="your-rank-clean-left">
+        <div class="your-rank-clean-label"><small>Your Rank </small><small><a href="#appSection">@${escapeHtml(me.username || me.email || '')}</a><small></div>
+        <div class="your-rank-clean-main">${renderRankBadge(me.rank)}</div>
+      </div>
+
+      <div class="your-rank-clean-stats">
+        <div class="your-rank-clean-stat">
+          <span class="your-rank-clean-stat-value">${me.averagePercentage}%</span>
+          <span class="your-rank-clean-stat-label">Average</span>
+        </div>
+        <div class="your-rank-clean-stat">
+          <span class="your-rank-clean-stat-value">${me.attempts}</span>
+          <span class="your-rank-clean-stat-label">Attempts</span>
+        </div>
+        <div class="your-rank-clean-stat">
+          <span class="your-rank-clean-stat-value">${escapeHtml(formatDate(me.lastTaken))}</span>
+          <span class="your-rank-clean-stat-label">Last Taken</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function destroyRankingChart() {
+  if (state.rankingChart) {
+    state.rankingChart.destroy();
+    state.rankingChart = null;
+  }
+}
+
+function renderRankingChart() {
+  const canvas = $('rankingChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  destroyRankingChart();
+
+  const topItems = (state.rankings || []).slice(0, 5);
+  if (!topItems.length) return;
+
+  const labels = topItems.map(item =>
+    truncateLabel(item.username || item.email || '', 18)
+  );
+  const values = topItems.map(item => Number(item.averagePercentage || 0));
+
+  state.rankingChart = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Average %',
+        data: values,
+        borderWidth: 1,
+        borderRadius: 12
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: {
+          display: false
+        },
+        tooltip: {
+          callbacks: {
+            title: function(context) {
+              const index = context[0].dataIndex;
+              return topItems[index].username || topItems[index].email || '';
+            },
+            label: function(context) {
+              return `Average: ${context.raw}%`;
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          suggestedMax: 100
+        }
+      }
+    }
+  });
+}
+
+/* =========================
+   ADMIN EXAM BUILDER
+========================= */
+function handleAdminNext() {
+  if (state.adminStep === 1) {
+    const subject = $('subjectSelect').value;
+    if (!subject) {
+      showAdminAlert('Please select a subject first.', 'warning');
+      return;
+    }
+    state.selectedAdminSubject = subject;
+  }
+
+  if (state.adminStep === 2) {
+    const itemCount = parseInt($('itemCount').value, 10);
+    if (!itemCount || itemCount < 1) {
+      showAdminAlert('Please enter a valid number of items.', 'warning');
+      return;
+    }
+    state.adminItemCount = itemCount;
+    buildQuestionForms();
+  }
+
+  if (state.adminStep < 3) {
+    state.adminStep++;
+    updateAdminWizard();
+  }
+}
+
+function handleAdminPrev() {
+  if (state.adminStep > 1) {
+    state.adminStep--;
+    updateAdminWizard();
+  }
+}
+
+function updateAdminWizard() {
+  document.querySelectorAll('.wizard-step').forEach(step => {
+    step.classList.remove('active');
+    if (Number(step.dataset.genPage) === state.adminStep) {
+      step.classList.add('active');
+    }
+  });
+
+  document.querySelectorAll('.wizard-dot').forEach(dot => {
+    dot.classList.remove('active');
+    if (Number(dot.dataset.stepDot) === state.adminStep) {
+      dot.classList.add('active');
+    }
+  });
+
+  $('btnPrev').style.visibility = state.adminStep === 1 ? 'hidden' : 'visible';
+  $('btnNext').classList.toggle('d-none', state.adminStep === 3);
+  $('btnSubmitQuestions').classList.toggle('d-none', state.adminStep !== 3);
+  $('selectedSubjectLabel').textContent = state.selectedAdminSubject
+    ? `Selected Subject: ${state.selectedAdminSubject}`
+    : '';
+}
+
+function buildQuestionForms() {
+  const count = parseInt($('itemCount').value, 10);
+  if (!count || count < 1) {
+    showAdminAlert('Enter a valid number first.', 'warning');
+    return;
+  }
+
+  const container = $('questionsContainer');
+  container.innerHTML = '';
+
+  for (let i = 1; i <= count; i++) {
+    const block = document.createElement('div');
+    block.className = 'question-card';
+    block.innerHTML = `
+      <h6>Question ${i}</h6>
+      <div class="mb-3">
+        <label class="form-label">Question</label>
+        <input type="text" class="form-control school-input" data-field="question" data-index="${i}">
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Option A</label>
+        <input type="text" class="form-control school-input" data-field="optionA" data-index="${i}">
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Option B</label>
+        <input type="text" class="form-control school-input" data-field="optionB" data-index="${i}">
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Option C</label>
+        <input type="text" class="form-control school-input" data-field="optionC" data-index="${i}">
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Option D</label>
+        <input type="text" class="form-control school-input" data-field="optionD" data-index="${i}">
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Answer Key</label>
+        <select class="form-select school-input" data-field="answerKey" data-index="${i}">
+          <option value="">Select correct answer</option>
+          <option value="Option A">Option A</option>
+          <option value="Option B">Option B</option>
+          <option value="Option C">Option C</option>
+          <option value="Option D">Option D</option>
+        </select>
+      </div>
+    `;
+    container.appendChild(block);
+  }
+}
+
+function collectAdminQuestions() {
+  const items = [];
+
+  for (let i = 1; i <= state.adminItemCount; i++) {
+    const question = document.querySelector(`[data-field="question"][data-index="${i}"]`)?.value.trim() || '';
+    const optionA = document.querySelector(`[data-field="optionA"][data-index="${i}"]`)?.value.trim() || '';
+    const optionB = document.querySelector(`[data-field="optionB"][data-index="${i}"]`)?.value.trim() || '';
+    const optionC = document.querySelector(`[data-field="optionC"][data-index="${i}"]`)?.value.trim() || '';
+    const optionD = document.querySelector(`[data-field="optionD"][data-index="${i}"]`)?.value.trim() || '';
+    const answerKey = document.querySelector(`[data-field="answerKey"][data-index="${i}"]`)?.value || '';
+
+    if (!question || !optionA || !optionB || !optionC || !optionD || !answerKey) {
+      throw new Error(`Please complete all fields for Question ${i}.`);
+    }
+
+    items.push({ question, optionA, optionB, optionC, optionD, answerKey });
+  }
+
+  return items;
+}
+
+async function handleSaveQuestions() {
+  try {
+    const items = collectAdminQuestions();
+
+    setLoading(true);
+
+    const url = `${API_URL}?action=saveExamQuestions&subject=${encodeURIComponent(state.selectedAdminSubject)}&items=${encodeURIComponent(JSON.stringify(items))}`;
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (!data.success) throw new Error(data.message || 'Failed to save questions.');
+
+    showAdminAlert(`Saved successfully. IDs: ${data.data.ids.join(', ')}`, 'success');
+
+    $('itemCount').value = '';
+    $('questionsContainer').innerHTML = '';
+    state.adminItemCount = 0;
+    state.adminStep = 1;
+    updateAdminWizard();
+  } catch (error) {
+    showAdminAlert(error.message || 'Failed to fetch', 'danger');
+  } finally {
+    setLoading(false);
+  }
+}
+
+/* =========================
+   EXAM TAKING FLOW
+========================= */
+async function handleStudentSubjectChange(e) {
+  const subject = e.target.value;
+  state.selectedExamSubject = subject;
+  renderExamSubjectPicker();
+
+  state.selectedExamMode = null;
+  state.fullSubjectQuestions = [];
+  $('selectedExamSetupText').textContent = 'No setup selected yet.';
+  $('examModeOptions').innerHTML = `<div class="empty-mode-note">Loading options...</div>`;
+
+  if (!subject) {
+    $('examModeOptions').innerHTML = `<div class="empty-mode-note">Select a subject first.</div>`;
+    return;
+  }
 
   try {
-    await withLoading(() => api("addSubGenre", getSessionToken(), value))();
-    input.value = "";
-    await refreshFeed();
-    showAlert("Sub-genre added successfully.", "success");
+    const res = await fetch(`${API_URL}?action=getExamMeta&subject=${encodeURIComponent(subject)}`);
+    const data = await res.json();
+
+    if (!data.success) throw new Error(data.message || 'Failed to load exam info.');
+
+    renderExamModeOptions(data.data.totalQuestions || 0);
   } catch (error) {
-    showAlert(error.message, "danger");
+    $('examModeOptions').innerHTML = `<div class="empty-mode-note">${escapeHtml(error.message)}</div>`;
   }
 }
 
-function toggleDashboard() {
-  state.dashboardHidden = !state.dashboardHidden;
-  applyDashboardVisibility();
+function renderExamModeOptions(totalQuestions) {
+  const box = $('examModeOptions');
+
+  if (!totalQuestions) {
+    box.innerHTML = `<div class="empty-mode-note">No available questions for this subject yet.</div>`;
+    return;
+  }
+
+  const practiceOptions = [];
+  const officialOptions = [];
+
+  if (totalQuestions >= 5) {
+    practiceOptions.push(
+      {
+        count: 5,
+        mode: 'ordered',
+        label: '5 items only',
+        isOfficial: false
+      },
+      {
+        count: 5,
+        mode: 'random',
+        label: '5 randoms',
+        isOfficial: false
+      }
+    );
+  }
+
+  if (totalQuestions >= 50) {
+    officialOptions.push(
+      {
+        count: 50,
+        mode: 'ordered',
+        label: '50 items only',
+        isOfficial: true
+      },
+      {
+        count: 50,
+        mode: 'random',
+        label: '50 randoms',
+        isOfficial: true
+      }
+    );
+  } else if (totalQuestions >= 20) {
+    officialOptions.push(
+      {
+        count: totalQuestions,
+        mode: 'ordered',
+        label: `${totalQuestions} items only`,
+        isOfficial: true
+      },
+      {
+        count: totalQuestions,
+        mode: 'random',
+        label: `${totalQuestions} randoms`,
+        isOfficial: true
+      }
+    );
+  }
+
+  const renderOptionButton = (opt, isActive = false) => `
+    <button
+      type="button"
+      class="exam-mode-option ${isActive ? 'active' : ''} ${opt.isOfficial ? 'official-mode' : 'practice-mode'}"
+      data-count="${opt.count}"
+      data-mode="${opt.mode}"
+      data-label="${opt.label}"
+      data-official="${opt.isOfficial ? '1' : '0'}"
+    >
+      <span class="exam-mode-title">${escapeHtml(opt.label)}</span>
+      <small class="exam-mode-subtext">
+        ${opt.isOfficial ? 'Official • counted in leaderboard' : 'Practice • not counted in leaderboard'}
+      </small>
+    </button>
+  `;
+
+  let html = '';
+
+  if (practiceOptions.length) {
+    html += `
+      <div class="exam-mode-group">
+        <div class="exam-mode-group-head practice-head">
+          <span class="exam-mode-group-title">Practice</span>
+          <span class="exam-mode-group-note">Quick review only</span>
+        </div>
+        <div class="exam-mode-group-grid">
+          ${practiceOptions.map((opt, index) => renderOptionButton(opt, index === 0)).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  if (officialOptions.length) {
+    html += `
+      <div class="exam-mode-group">
+        <div class="exam-mode-group-head official-head">
+          <span class="exam-mode-group-title">Official</span>
+          <span class="exam-mode-group-note">Affects leaderboard</span>
+        </div>
+        <div class="exam-mode-group-grid">
+          ${officialOptions.map(opt => renderOptionButton(opt, false)).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  box.innerHTML = html;
+
+  const firstOption = practiceOptions[0] || officialOptions[0];
+  if (!firstOption) {
+    box.innerHTML = `<div class="empty-mode-note">No valid exam modes available.</div>`;
+    return;
+  }
+
+  state.selectedExamMode = {
+    count: firstOption.count,
+    mode: firstOption.mode,
+    label: firstOption.label,
+    isOfficial: firstOption.isOfficial
+  };
+
+  updateSelectedExamSetupText();
+
+  box.querySelectorAll('.exam-mode-option').forEach(btn => {
+    btn.addEventListener('click', () => {
+      box.querySelectorAll('.exam-mode-option').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      state.selectedExamMode = {
+        count: Number(btn.dataset.count),
+        mode: btn.dataset.mode,
+        label: btn.dataset.label,
+        isOfficial: btn.dataset.official === '1'
+      };
+
+      updateSelectedExamSetupText();
+    });
+  });
 }
 
-function applyDashboardVisibility() {
-  const content = $("dashboardContent");
-  const btn = $("toggleDashboardBtn");
+function updateSelectedExamSetupText() {
+  if (!state.selectedExamSubject || !state.selectedExamMode) {
+    $('selectedExamSetupText').textContent = 'No setup selected yet.';
+    return;
+  }
 
-  if (!content || !btn) return;
+  const typeLabel = state.selectedExamMode.isOfficial
+    ? 'Official • counted in leaderboard'
+    : 'Practice • not counted in leaderboard';
 
-  content.classList.toggle("d-none", state.dashboardHidden);
-  btn.textContent = state.dashboardHidden ? "Show Dashboard" : "Hide Dashboard";
-
-  bindDashboardMonthToggles();
+  $('selectedExamSetupText').textContent =
+    `${state.selectedExamSubject} | ${state.selectedExamMode.label} | ${typeLabel}`;
 }
 
-function bindDashboardMonthToggles() {
-  document.querySelectorAll("[data-month-toggle], [data-rating-toggle]").forEach((btn) => {
-    btn.onclick = () => {
-      const item = btn.closest(".dashboard-month-item");
-      const isOpen = item.classList.toggle("open");
-      btn.setAttribute("aria-expanded", String(isOpen));
+async function handleLoadExam() {
+  try {
+    const subject = $('examSubjectSelect').value;
+    if (!subject) throw new Error('Please select a subject.');
+    if (!state.selectedExamMode) throw new Error('Please choose an exam type first.');
+
+    const isOfficial50 = state.selectedExamMode?.isOfficial && Number(state.selectedExamMode?.count || 0) >= 50;
+    const usedAttempts = Number(state.official50AttemptsBySubject?.[subject] || 0);
+
+    if (isOfficial50 && usedAttempts >= 2) {
+      throw new Error(`You already used the maximum 2 official 50-item attempts for ${subject}.`);
+    }
+
+    setLoading(true);
+
+    const existingDraft = findMatchingExamDraft();
+    if (existingDraft && existingDraft.loadedExamQuestions?.length) {
+      state.resumeDraft = existingDraft;
+
+      $('resumeExamText').textContent =
+        `${subject} • ${state.selectedExamMode.label}\nYou left at question ${existingDraft.currentExamIndex + 1}.`;
+
+      const modalEl = $('resumeExamModal');
+      state.resumeModalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+      state.resumeModalInstance.show();
+
+      return;
+    }
+
+    const res = await fetch(`${API_URL}?action=getExamQuestions&subject=${encodeURIComponent(subject)}`);
+    const data = await res.json();
+
+    if (!data.success) throw new Error(data.message || 'Failed to load exam.');
+
+    const allQuestions = data.data || [];
+    if (!allQuestions.length) throw new Error('No questions found for this subject.');
+
+    state.fullSubjectQuestions = allQuestions;
+    state.loadedExamQuestions = buildExamQuestionSet(allQuestions, state.selectedExamMode);
+
+    if (!state.loadedExamQuestions.length) {
+      throw new Error('Unable to prepare exam questions.');
+    }
+
+    renderExamModalCarousel(state.loadedExamQuestions, subject, state.selectedExamMode, null);
+    saveExamDraft();
+
+    const examModalEl = $('examModal');
+    if (!examModalEl) {
+      throw new Error('Exam modal element not found.');
+    }
+
+    if (!window.bootstrap || !bootstrap.Modal) {
+      throw new Error('Bootstrap modal is not loaded.');
+    }
+
+    state.examModalInstance = bootstrap.Modal.getOrCreateInstance(examModalEl, {
+      backdrop: 'static',
+      keyboard: false
+    });
+    state.examModalInstance.show();
+  } catch (error) {
+    showUserExamAlert(error.message, 'danger');
+  } finally {
+    setLoading(false);
+  }
+}
+
+function buildExamQuestionSet(allQuestions, examMode) {
+  const cloned = [...allQuestions];
+
+  if (examMode.mode === 'random') {
+    shuffleArray(cloned);
+    return cloned.slice(0, examMode.count);
+  }
+
+  return cloned.slice(0, examMode.count);
+}
+
+function shuffleArray(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+
+function renderExamModalCarousel(questions, subject, examMode, draft = null) {
+  const inner = $('examCarouselInner');
+  const examCarouselEl = $('examCarousel');
+
+  if (!inner) {
+    throw new Error('examCarouselInner not found.');
+  }
+
+  if (!examCarouselEl) {
+    throw new Error('examCarousel not found.');
+  }
+
+  inner.innerHTML = questions.map((q, index) => `
+    <div class="carousel-item ${index === 0 ? 'active' : ''}">
+      <div class="exam-slide-card">
+        <div class="exam-question-text">${escapeHtml(q.question)}</div>
+
+        <div class="form-check mb-2">
+          <input class="form-check-input" type="radio" name="exam_${q.id}" value="Option A" id="${q.id}_A">
+          <label class="form-check-label" for="${q.id}_A">${escapeHtml(q.optionA)}</label>
+        </div>
+
+        <div class="form-check mb-2">
+          <input class="form-check-input" type="radio" name="exam_${q.id}" value="Option B" id="${q.id}_B">
+          <label class="form-check-label" for="${q.id}_B">${escapeHtml(q.optionB)}</label>
+        </div>
+
+        <div class="form-check mb-2">
+          <input class="form-check-input" type="radio" name="exam_${q.id}" value="Option C" id="${q.id}_C">
+          <label class="form-check-label" for="${q.id}_C">${escapeHtml(q.optionC)}</label>
+        </div>
+
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="exam_${q.id}" value="Option D" id="${q.id}_D">
+          <label class="form-check-label" for="${q.id}_D">${escapeHtml(q.optionD)}</label>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  state.currentExamIndex = 0;
+  $('examModalMeta').textContent = `${subject} | ${examMode.label}`;
+  $('btnSubmitExam').classList.add('d-none');
+
+  state.examCarousel = bootstrap.Carousel.getOrCreateInstance(examCarouselEl, {
+    interval: false,
+    touch: false,
+    wrap: false
+  });
+
+  attachExamDraftListeners();
+  restoreExamDraftAnswers(draft);
+
+  const restoreIndex = Math.min(
+    Number(draft?.currentExamIndex || 0),
+    Math.max(questions.length - 1, 0)
+  );
+
+  if (restoreIndex > 0) {
+    state.examCarousel.to(restoreIndex);
+    state.currentExamIndex = restoreIndex;
+  }
+
+  updateExamCarouselUI();
+}
+
+function updateExamCarouselUI() {
+  const items = [...document.querySelectorAll('#examCarouselInner .carousel-item')];
+  const activeIndex = items.findIndex(item => item.classList.contains('active'));
+  state.currentExamIndex = activeIndex >= 0 ? activeIndex : 0;
+
+  const total = items.length;
+  const current = state.currentExamIndex + 1;
+
+  $('examProgressText').textContent = total ? `Question ${current} of ${total}` : '';
+
+  $('btnExamPrev').disabled = state.currentExamIndex <= 0;
+
+  const isLast = state.currentExamIndex >= total - 1;
+  $('btnExamNext').classList.toggle('d-none', isLast);
+  $('btnSubmitExam').classList.toggle('d-none', !isLast);
+  
+  saveExamDraft();
+}
+
+function goPrevExamSlide() {
+  if (state.examCarousel) {
+    state.examCarousel.prev();
+  }
+}
+
+function goNextExamSlide() {
+  const currentQuestion = state.loadedExamQuestions[state.currentExamIndex];
+  if (!currentQuestion) return;
+
+  const checked = document.querySelector(`input[name="exam_${currentQuestion.id}"]:checked`);
+  if (!checked) {
+    showUserExamAlert(`Please answer Question ${state.currentExamIndex + 1} before going next.`, 'warning');
+    return;
+  }
+
+  if (state.examCarousel) {
+    state.examCarousel.next();
+  }
+}
+
+function collectExamAnswers() {
+  return state.loadedExamQuestions.map(q => {
+    const checked = document.querySelector(`input[name="exam_${q.id}"]:checked`);
+    return {
+      id: q.id,
+      answer: checked ? checked.value : ''
     };
   });
 }
 
-function toggleNotifications() {
-  state.notifOpen = !state.notifOpen;
-  $("notifDropdown")?.classList.toggle("d-none", !state.notifOpen);
-
-  if (state.notifOpen) {
-    markNotificationsRead();
-  }
-}
-
-function closeNotifications() {
-  state.notifOpen = false;
-  $("notifDropdown")?.classList.add("d-none");
-}
-
-function renderNotifications() {
-  const notifList = $("notifList");
-  const notifBadge = $("notifBadge");
-
-  if (!notifList || !notifBadge) return;
-
-  const items = Array.isArray(state.notifications) ? state.notifications : [];
-  const unreadCount = items.filter((item) => !item.isRead).length;
-
-  notifBadge.textContent = String(unreadCount);
-  notifBadge.classList.toggle("d-none", unreadCount === 0);
-
-  if (!items.length) {
-    notifList.innerHTML = `<div class="p-3 text-secondary-light small">No notifications yet.</div>`;
-    return;
-  }
-
-  notifList.innerHTML = "";
-
-  items.forEach((item) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = `notif-item ${item.isRead ? "" : "unread"}`;
-
-    btn.innerHTML = `
-      <div class="notif-item-title">${escapeHtml(item.message || "")}</div>
-      <div class="notif-item-time">${formatDateTime(item.createdAt)}</div>
-    `;
-
-    btn.addEventListener("click", () => {
-      closeNotifications();
-      if (item.postId) {
-        scrollToPost(item.postId);
-      }
-    });
-
-    notifList.appendChild(btn);
-  });
-}
-
-async function markNotificationsRead() {
-  const unread = state.notifications.filter((item) => !item.isRead);
-  if (!unread.length) return;
-
+async function handleSubmitExam() {
   try {
-    await api("markNotificationsRead", getSessionToken());
+    const subject = $('examSubjectSelect').value;
+    if (!subject) throw new Error('No subject selected.');
 
-    state.notifications = state.notifications.map((item) => ({
-      ...item,
-      isRead: true
-    }));
+    const answers = collectExamAnswers();
 
-    renderNotifications();
+    if (answers.some(a => !a.answer)) {
+      throw new Error('Please answer all questions before submitting.');
+    }
+
+    setLoading(true);
+
+    const examMode = state.selectedExamMode?.mode || '';
+    const itemCount = state.selectedExamMode?.count || answers.length;
+    const examLabel = state.selectedExamMode?.label || '';
+
+    const url = `${API_URL}?action=submitExam&email=${encodeURIComponent(state.currentUser.email)}&subject=${encodeURIComponent(subject)}&answers=${encodeURIComponent(JSON.stringify(answers))}&examMode=${encodeURIComponent(examMode)}&itemCount=${encodeURIComponent(itemCount)}&examLabel=${encodeURIComponent(examLabel)}`;
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (!data.success) throw new Error(data.message || 'Failed to submit exam.');
+    if (!data.data) throw new Error(data.message || 'No exam result returned from server.');
+
+    if (state.examModalInstance) {
+      state.examModalInstance.hide();
+    }
+
+    clearExamDraft();
+    const isOfficial = Number(data.data.itemCount || data.data.totalItems || 0) >= 20;
+    const examTypeText = isOfficial
+      ? 'This result was recorded as an official exam and affects the leaderboard.'
+      : 'This result was recorded as practice only and does not affect the official leaderboard.';
+
+    showUserExamAlert(
+      `Exam submitted successfully.<br>
+      Score: ${data.data.score}/${data.data.totalItems}<br>
+      Percentage: ${data.data.percentage}%<br>
+      <small>${examTypeText}</small>`,
+      'success'
+    );
+
+    await loadDashboard();
+    await loadRankings(true);
   } catch (error) {
-    console.error("Failed to mark notifications as read:", error);
-  }
-}
-
-function scrollToPost(postId) {
-  const selector = `[data-post-id="${cssEscape(postId)}"]`;
-  const postEl = document.querySelector(selector);
-  if (!postEl) return;
-
-  postEl.scrollIntoView({
-    behavior: "smooth",
-    block: "start"
-  });
-
-  postEl.classList.add("post-highlight");
-  setTimeout(() => postEl.classList.remove("post-highlight"), 1800);
-}
-
-async function handleSavePost(event) {
-  event.preventDefault();
-  hideAlerts();
-
-  const postId = $("postId")?.value.trim() || "";
-  const movieName = $("movieName")?.value.trim() || "";
-  const genre = $("genre")?.value || "";
-  const subGenres = getSelectedSubGenres();
-  const rating = $("rating")?.value || "";
-  const dateWatched = $("dateWatched")?.value || "";
-  const duration = $("duration")?.value.trim() || "";
-  const caption = $("caption")?.value.trim() || "";
-  const submitBtn = event.submitter;
-
-  try {
-    toggleButton(submitBtn, true);
-
-    await withLoading(async () => {
-      if (state.isEditing && postId) {
-        await api(
-          "updatePost",
-          getSessionToken(),
-          postId,
-          movieName,
-          genre,
-          subGenres,
-          rating,
-          dateWatched,
-          duration,
-          caption
-        );
-        showAlert("Post updated successfully.", "success");
-      } else {
-        await api(
-          "createPost",
-          getSessionToken(),
-          movieName,
-          genre,
-          subGenres,
-          rating,
-          dateWatched,
-          duration,
-          caption
-        );
-
-        const linkedTodo = state.todos.find((todo) => todo.todoId === state.selectedTodoId);
-
-        if (
-          linkedTodo &&
-          linkedTodo.movieName.trim().toLowerCase() === movieName.trim().toLowerCase()
-        ) {
-          await api("deleteTodo", getSessionToken(), linkedTodo.todoId);
-          state.selectedTodoId = "";
-        }
-
-        showAlert("Movie posted successfully.", "success");
-      }
-    })();
-
-    resetPostForm();
-    await refreshFeed();
-  } catch (error) {
-    showAlert(error.message, "danger");
+    showUserExamAlert(error.message || 'Failed to fetch', 'danger');
   } finally {
-    toggleButton(submitBtn, false);
+    setLoading(false);
   }
 }
 
-function renderFeed(feed) {
-  const feedList = $("feedList");
-  const emptyFeed = $("emptyFeed");
-  const feedCountBadge = $("feedCountBadge");
+/* =========================
+   EXAM RESUME HANDLERS
+========================= */
 
-  if (!feedList || !emptyFeed || !feedCountBadge) return;
+async function handleResumeExam() {
+  try {
+    const draft = state.resumeDraft;
+    if (!draft) return;
 
-  feedList.innerHTML = "";
-  feedCountBadge.textContent = `${feed.length} post${feed.length !== 1 ? "s" : ""}`;
-  emptyFeed.classList.toggle("d-none", feed.length > 0);
+    if (state.resumeModalInstance) {
+      state.resumeModalInstance.hide();
+    }
 
-  feed.forEach((post) => {
-    feedList.appendChild(renderPostCard(post));
-  });
-}
+    state.fullSubjectQuestions = [...draft.loadedExamQuestions];
+    state.loadedExamQuestions = [...draft.loadedExamQuestions];
 
-function renderPostCard(post) {
-  const card = document.createElement("div");
-  card.className = "glass-card post-card p-4 mb-4";
-  card.setAttribute("data-post-id", post.postId);
+    renderExamModalCarousel(
+      state.loadedExamQuestions,
+      draft.subject,
+      draft.examMode,
+      draft
+    );
 
-  const canEditPost = state.currentUser && state.currentUser.username === post.username;
-  const subGenrePills = (post.subGenres || [])
-    .map((subGenre) => `<span class="meta-pill">${escapeHtml(subGenre)}</span>`)
-    .join("");
-
-  card.innerHTML = `
-    <div class="d-flex justify-content-between gap-3 flex-wrap">
-      <div class="d-flex gap-3 align-items-start">
-        ${
-          post.avatar
-            ? `<img src="${escapeHtml(post.avatar)}" class="avatar-img" alt="avatar">`
-            : `<div class="avatar-fallback"><i class="bi bi-person-fill"></i></div>`
-        }
-        <div>
-          <div class="fw-bold">${escapeHtml(post.name || post.username)}</div>
-          <div class="text-secondary-light small" hidden>@${escapeHtml(post.username)}</div>
-          <div class="text-secondary-light small mt-1">${formatDateTime(post.createdAt)}</div>
-        </div>
-      </div>
-
-      ${
-        canEditPost
-          ? `
-        <div class="d-flex gap-2">
-          <button class="btn btn-sm btn-warning-soft edit-post-btn align-self-start" type="button">
-            <i class="bi bi-pencil-square"></i>
-          </button>
-          <button class="btn btn-sm btn-danger-soft delete-post-btn align-self-start" type="button">
-            <i class="bi bi-trash"></i>
-          </button>
-        </div>
-      `
-          : ""
-      }
-    </div>
-
-    <div class="mt-4">
-      <h3 class="h4 fw-bold mb-2">${escapeHtml(post.movieName)}</h3>
-
-      <div class="post-meta mb-3">
-        <span class="meta-pill meta-pill-genre">${escapeHtml(post.genre || "-")}</span>
-        ${subGenrePills}
-        <span class="meta-pill">${renderStars(post.rating)}</span>
-        <span class="meta-pill">${escapeHtml(post.duration || "-")}</span>
-        <span class="meta-pill">Watched: ${formatDate(post.dateWatched)}</span>
-      </div>
-
-      ${post.caption ? `<p class="post-caption mb-0">${escapeHtml(post.caption)}</p>` : ""}
-    </div>
-
-    <hr class="custom-divider">
-
-    <div class="comments-wrap">
-      <h4 class="h6 fw-bold mb-3">
-        <i class="bi bi-chat-dots me-2"></i>Comments (${post.comments.length})
-      </h4>
-
-      <div class="comments-list mb-3"></div>
-
-      <form class="comment-form d-flex gap-2">
-        <input type="text" class="form-control custom-input comment-input" placeholder="Write a comment..." required>
-        <button type="submit" class="btn btn-primary custom-btn comment-btn">
-          <i class="bi bi-send"></i>
-        </button>
-      </form>
-    </div>
-  `;
-
-  const commentsList = card.querySelector(".comments-list");
-
-  if (!post.comments.length) {
-    commentsList.innerHTML = `<div class="text-secondary-light small">No comments yet.</div>`;
-  } else {
-    post.comments.forEach((comment) => {
-      commentsList.appendChild(renderCommentItem(comment));
+    const examModalEl = $('examModal');
+    state.examModalInstance = bootstrap.Modal.getOrCreateInstance(examModalEl, {
+      backdrop: 'static',
+      keyboard: false
     });
+
+    state.examModalInstance.show();
+
+    showGlobalAlert('Resumed your unfinished exam.', 'info');
+  } catch (error) {
+    showGlobalAlert('Failed to resume exam.', 'danger');
   }
-
-  bindPostCardEvents(card, post, canEditPost);
-  return card;
 }
 
-function renderCommentItem(comment) {
-  const item = document.createElement("div");
-  item.className = "comment-item";
-
-  const canDeleteComment = state.currentUser && state.currentUser.username === comment.username;
-
-  item.innerHTML = `
-    <div class="d-flex justify-content-between gap-3">
-      <div class="d-flex gap-2">
-        ${
-          comment.avatar
-            ? `<img src="${escapeHtml(comment.avatar)}" class="comment-avatar" alt="avatar">`
-            : `<div class="comment-avatar fallback"><i class="bi bi-person-fill"></i></div>`
-        }
-        <div>
-          <div class="small fw-semibold">${escapeHtml(comment.name || comment.username)}</div>
-          <div class="small text-secondary-light smx-font">${escapeHtml(comment.comment)}</div>
-          <div class="small text-secondary smx-font mt-1">${formatDateTime(comment.createdAt)}</div>
-        </div>
-      </div>
-      ${
-        canDeleteComment
-          ? `
-        <button class="btn btn-sm btn-link text-danger delete-comment-btn p-3 align-self-center" type="button" data-comment-id="${escapeHtml(comment.commentId)}">
-          <i class="bi bi-x-circle lgx-font"></i>
-        </button>
-      `
-          : ""
-      }
-    </div>
-  `;
-
-  return item;
-}
-
-function bindPostCardEvents(card, post, canEditPost) {
-  const commentForm = card.querySelector(".comment-form");
-  const commentInput = card.querySelector(".comment-input");
-
-  commentForm?.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const text = commentInput.value.trim();
-    const submitBtn = commentForm.querySelector("button[type='submit']");
-    if (!text) return;
-
-    try {
-      toggleButton(submitBtn, true);
-      await withLoading(() => api("addComment", getSessionToken(), post.postId, text))();
-      commentInput.value = "";
-      showAlert("Comment posted successfully.", "success");
-      await refreshFeed();
-    } catch (error) {
-      showAlert(error.message, "danger");
-    } finally {
-      toggleButton(submitBtn, false);
+async function handleStartNewExam() {
+  try {
+    if (state.resumeModalInstance) {
+      state.resumeModalInstance.hide();
     }
-  });
 
-  card.querySelectorAll(".delete-comment-btn").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const commentId = btn.dataset.commentId;
+    clearExamDraft();
 
-      try {
-        toggleButton(btn, true);
-        await withLoading(() => api("deleteComment", getSessionToken(), commentId))();
-        showAlert("Comment deleted successfully.", "success");
-        await refreshFeed();
-      } catch (error) {
-        showAlert(error.message, "danger");
-      } finally {
-        toggleButton(btn, false);
-      }
+    const subject = $('examSubjectSelect').value;
+
+    const res = await fetch(`${API_URL}?action=getExamQuestions&subject=${encodeURIComponent(subject)}`);
+    const data = await res.json();
+
+    if (!data.success) throw new Error(data.message);
+
+    const allQuestions = data.data || [];
+
+    state.fullSubjectQuestions = allQuestions;
+    state.loadedExamQuestions = buildExamQuestionSet(allQuestions, state.selectedExamMode);
+
+    renderExamModalCarousel(
+      state.loadedExamQuestions,
+      subject,
+      state.selectedExamMode,
+      null
+    );
+
+    saveExamDraft();
+
+    const examModalEl = $('examModal');
+    state.examModalInstance = bootstrap.Modal.getOrCreateInstance(examModalEl, {
+      backdrop: 'static',
+      keyboard: false
     });
-  });
 
-  if (!canEditPost) return;
+    state.examModalInstance.show();
 
-  card.querySelector(".edit-post-btn")?.addEventListener("click", () => startEdit(post));
-
-  card.querySelector(".delete-post-btn")?.addEventListener("click", async (event) => {
-    if (!confirm(`Delete post for "${post.movieName}"?`)) return;
-
-    const btn = event.currentTarget;
-
-    try {
-      toggleButton(btn, true);
-      await withLoading(() => api("deletePost", getSessionToken(), post.postId))();
-      showAlert("Post deleted successfully.", "success");
-      await refreshFeed();
-    } catch (error) {
-      showAlert(error.message, "danger");
-    } finally {
-      toggleButton(btn, false);
-    }
-  });
+    showGlobalAlert('Started a new exam.', 'info');
+  } catch (error) {
+    showGlobalAlert(error.message, 'danger');
+  }
 }
 
-function getSelectedSubGenres() {
-  return Array.from(document.querySelectorAll('input[name="subGenre"]:checked'))
-    .map((input) => input.value.trim())
-    .filter(Boolean);
+/* =========================
+   ANNOUNCEMENTS
+========================= */
+async function loadAnnouncements() {
+  try {
+    const res = await fetch(`${API_URL}?action=getAnnouncements`);
+    const data = await res.json();
+
+    if (!data.success) throw new Error(data.message || 'Failed to load announcements.');
+
+    state.announcements = data.data || [];
+    renderAnnouncements();
+  } catch (error) {
+    $('announcementList').innerHTML = `<div class="empty-mode-note">${escapeHtml(error.message)}</div>`;
+  }
 }
 
-function setSelectedSubGenres(values) {
-  const selected = new Set(Array.isArray(values) ? values : []);
+function renderAnnouncements() {
+  const box = $('announcementList');
+  const currentEmail = state.currentUser?.email?.toLowerCase?.() || '';
 
-  document.querySelectorAll('input[name="subGenre"]').forEach((input) => {
-    input.checked = selected.has(input.value);
-  });
-}
-
-function renderSubGenrePreview() {
-  const list = $("subGenrePreviewList");
-  const count = $("subGenreCount");
-
-  if (!list || !count) return;
-
-  count.textContent = `${state.subGenres.length} item${state.subGenres.length !== 1 ? "s" : ""}`;
-
-  if (!state.subGenres.length) {
-    list.innerHTML = `<div class="text-secondary-light small">No sub-genres yet.</div>`;
+  if (!state.announcements.length) {
+    box.innerHTML = `<div class="empty-mode-note">No announcements yet.</div>`;
     return;
   }
 
-  list.innerHTML = state.subGenres
-    .map((item) => `
-      <span class="subgenre-preview-pill">${escapeHtml(item.name)}</span>
-    `)
-    .join("");
-}
+  box.innerHTML = state.announcements.map(item => {
+    const userReaction = item.reactionsByUser?.[currentEmail] || '';
+    const likeActive = userReaction === 'like' ? 'active' : '';
+    const dislikeActive = userReaction === 'dislike' ? 'active' : '';
 
-function renderSubGenreCheckboxes() {
-  const group = $("subGenreGroup");
-  if (!group) return;
+    return `
+      <div class="announcement-card">
+        <div class="announcement-top">
+          <div class="announcement-avatar">${escapeHtml(item.profileLabel || 'S')}</div>
+          <div class="announcement-meta">
+            <div class="announcement-author-row">
+              <span class="announcement-email">${escapeHtml(item.username || item.email || '')}</span>
+            </div>
+            <div class="announcement-submeta">
+              <span>${escapeHtml(item.role || 'User')}</span>
+              <span>•</span>
+              <span title="${escapeHtml(formatDate(item.createdAt))}">${escapeHtml(formatRelativeTime(item.createdAt))}</span>
+            </div>
+          </div>
+        </div>
 
-  const selected = new Set(getSelectedSubGenres());
+        <div class="announcement-message">${escapeHtml(item.message || '')}</div>
 
-  if (!state.subGenres.length) {
-    group.innerHTML = `<div class="text-secondary-light small">No sub-genres available yet.</div>`;
-    return;
-  }
+        <div class="announcement-actions">
+          <button
+            class="reaction-btn ${likeActive}"
+            type="button"
+            data-announcement-id="${item.announcementId}"
+            data-reaction="like"
+          >
+            <i class="bi bi-hand-thumbs-up-fill me-1"></i>
+            Like
+            <span class="reaction-count">${item.likes || 0}</span>
+          </button>
 
-  group.innerHTML = state.subGenres.map((item) => `
-    <label class="subgenre-chip">
-      <input
-        type="checkbox"
-        name="subGenre"
-        value="${escapeHtml(item.name)}"
-        ${selected.has(item.name) ? "checked" : ""}
-      >
-      <span>${escapeHtml(item.name)}</span>
-    </label>
-  `).join("");
-}
+          <button
+            class="reaction-btn dislike ${dislikeActive}"
+            type="button"
+            data-announcement-id="${item.announcementId}"
+            data-reaction="dislike"
+          >
+            <i class="bi bi-hand-thumbs-down-fill me-1"></i>
+            Dislike
+            <span class="reaction-count">${item.dislikes || 0}</span>
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
 
-function startEdit(post) {
-  state.isEditing = true;
-
-  $("postId").value = post.postId || "";
-  $("movieName").value = post.movieName || "";
-  $("genre").value = post.genre || "";
-  setSelectedSubGenres(post.subGenres || []);
-  $("rating").value = String(post.rating || "");
-  $("dateWatched").value = normalizeDateForInput(post.dateWatched);
-  $("duration").value = post.duration || "";
-  $("caption").value = post.caption || "";
-
-  $("formTitle").textContent = "Edit Post";
-  $("submitBtn").innerHTML = `<i class="bi bi-save me-2"></i>Save Changes`;
-  $("cancelEditBtn").classList.remove("d-none");
-
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}
-
-function resetPostForm() {
-  state.isEditing = false;
-  $("postForm")?.reset();
-  $("postId").value = "";
-  setSelectedSubGenres([]);
-  $("formTitle").textContent = "Create Post";
-  $("submitBtn").innerHTML = `<i class="bi bi-send me-2"></i>Post Movie`;
-  $("cancelEditBtn").classList.add("d-none");
-  state.selectedTodoId = "";
-  renderSavedTodos();
-}
-
-function toggleButton(button, disabled) {
-  if (!button) return;
-  button.disabled = disabled;
-  button.setAttribute("aria-disabled", String(disabled));
-}
-
-function renderStars(rating) {
-  const n = Number(rating || 0);
-  return n > 0 ? "⭐".repeat(n) : "-";
-}
-
-function formatMonthShortLabel(value) {
-  if (!value || !/^\d{4}-\d{2}$/.test(String(value))) return value || "-";
-
-  const [year, month] = String(value).split("-").map(Number);
-  const d = new Date(year, month - 1, 1);
-
-  return d.toLocaleDateString("en-PH", {
-    month: "short"
+  box.querySelectorAll('.reaction-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const announcementId = btn.dataset.announcementId;
+      const reaction = btn.dataset.reaction;
+      await handleReactAnnouncement(announcementId, reaction);
+    });
   });
 }
 
-function numberToWord(value) {
-  const map = {
-    1: "One",
-    2: "Two",
-    3: "Three",
-    4: "Four",
-    5: "Five"
+async function handlePostAnnouncement() {
+  try {
+    const message = $('announcementMessage').value.trim();
+    if (!message) throw new Error('Please write a message first.');
+
+    setLoading(true);
+
+    const url = `${API_URL}?action=postAnnouncement&email=${encodeURIComponent(state.currentUser.email)}&message=${encodeURIComponent(message)}`;
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (!data.success) throw new Error(data.message || 'Failed to post announcement.');
+
+    $('announcementMessage').value = '';
+
+    if (data.data) {
+      state.announcements.unshift(data.data);
+      renderAnnouncements();
+    } else {
+      await loadAnnouncements();
+    }
+
+    showGlobalAlert('Announcement posted successfully.', 'success');
+  } catch (error) {
+    showGlobalAlert(error.message || 'Failed to fetch', 'danger');
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function handleReactAnnouncement(announcementId, reaction) {
+  try {
+    const url = `${API_URL}?action=reactAnnouncement&email=${encodeURIComponent(state.currentUser.email)}&announcementId=${encodeURIComponent(announcementId)}&reaction=${encodeURIComponent(reaction)}`;
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (!data.success) throw new Error(data.message || 'Failed to save reaction.');
+
+    const post = state.announcements.find(item => item.announcementId === announcementId);
+    if (post) {
+      post.likes = data.data.likes || 0;
+      post.dislikes = data.data.dislikes || 0;
+      if (!post.reactionsByUser) post.reactionsByUser = {};
+      post.reactionsByUser[state.currentUser.email.toLowerCase()] = data.data.userReaction || '';
+    }
+
+    renderAnnouncements();
+  } catch (error) {
+    showGlobalAlert(error.message || 'Failed to fetch', 'danger');
+  }
+}
+
+/* =========================
+   AUTO REFRESH
+========================= */
+function startAutoRefresh() {
+  stopAutoRefresh();
+
+  state.announcementRefreshTimer = setInterval(() => {
+    if (state.currentUser) {
+      loadAnnouncements();
+    }
+  }, 15000);
+
+  state.rankingRefreshTimer = setInterval(() => {
+    if (state.currentUser) {
+      loadRankings(true);
+    }
+  }, 15000);
+}
+
+function stopAutoRefresh() {
+  if (state.announcementRefreshTimer) {
+    clearInterval(state.announcementRefreshTimer);
+    state.announcementRefreshTimer = null;
+  }
+
+  if (state.rankingRefreshTimer) {
+    clearInterval(state.rankingRefreshTimer);
+    state.rankingRefreshTimer = null;
+  }
+}
+
+/* =========================
+   DATE / TEXT HELPERS
+========================= */
+function formatDate(value) {
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return '-';
+
+  return date.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+}
+
+function formatRelativeTime(value) {
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return '-';
+
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+
+  if (seconds < 10) return 'just now';
+  if (seconds < 60) return `${seconds} seconds ago`;
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days} day${days > 1 ? 's' : ''} ago`;
+
+  return formatDate(value);
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/* =========================
+   UI HELPERS
+========================= */
+function setLoading(isLoading) {
+  $('loadingOverlay').classList.toggle('d-none', !isLoading);
+}
+
+function showGlobalAlert(message, type = 'info') {
+  const wrap = $('globalAlertWrap');
+  if (!wrap) return;
+
+  const iconMap = {
+    success: 'bi-patch-check-fill',
+    danger: 'bi-x-circle-fill',
+    warning: 'bi-exclamation-triangle-fill',
+    info: 'bi-info-circle-fill'
   };
 
-  return map[value] || String(value);
+  const labelMap = {
+    success: 'Success',
+    danger: 'Error',
+    warning: 'Warning',
+    info: 'Notice'
+  };
+
+  const iconClass = iconMap[type] || iconMap.info;
+  const label = labelMap[type] || labelMap.info;
+
+  const item = document.createElement('div');
+  item.className = `alert alert-${type} alert-modern fade-in`;
+
+  item.innerHTML = `
+    <div class="alert-modern-inner">
+      <div class="alert-modern-icon">
+        <i class="bi ${iconClass}"></i>
+      </div>
+
+      <div class="alert-modern-content">
+        <div class="alert-modern-title">${label}</div>
+        <div class="alert-modern-message">${message}</div>
+      </div>
+    </div>
+  `;
+
+  wrap.appendChild(item);
+
+  setTimeout(() => {
+    item.classList.add('fade-out');
+
+    setTimeout(() => {
+      item.remove();
+    }, 400);
+  }, 6000);
 }
 
-function formatDate(value) {
-  if (!value) return "-";
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
-    const [year, month, day] = String(value).split("-").map(Number);
-    const d = new Date(year, month - 1, day);
-    return d.toLocaleDateString("en-PH", {
-      year: "numeric",
-      month: "short",
-      day: "numeric"
-    });
+function clearGlobalAlerts() {
+  const wrap = $('globalAlertWrap');
+  if (wrap) {
+    wrap.innerHTML = '';
   }
-
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-
-  return d.toLocaleDateString("en-PH", {
-    year: "numeric",
-    month: "short",
-    day: "numeric"
-  });
 }
 
-function formatDateTime(value) {
-  if (!value) return "-";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-
-  return d.toLocaleString("en-PH", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit"
-  });
+function showLoginAlert(message, type = 'info') {
+  showGlobalAlert(message, type);
 }
 
-function formatMonthLabel(value) {
-  if (!value || !/^\d{4}-\d{2}$/.test(String(value))) return value || "-";
-
-  const [year, month] = String(value).split("-").map(Number);
-  const d = new Date(year, month - 1, 1);
-
-  return d.toLocaleDateString("en-PH", {
-    year: "numeric",
-    month: "long"
-  });
+function showAdminAlert(message, type = 'info') {
+  showGlobalAlert(message, type);
 }
 
-function normalizeDateForInput(value) {
-  if (!value) return "";
-  if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) return String(value);
-
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
-
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function escapeHtml(str) {
-  return String(str)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function cssEscape(value) {
-  if (window.CSS && typeof window.CSS.escape === "function") {
-    return window.CSS.escape(value);
-  }
-
-  return String(value).replace(/["\\]/g, "\\$&");
+function showUserExamAlert(message, type = 'info') {
+  showGlobalAlert(message, type);
 }
